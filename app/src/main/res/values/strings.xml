@@ -6,7 +6,6 @@
     <string name="home_send_description">Choose files to share</string>
     <string name="home_receive">Receive</string>
     <string name="home_receive_description">Receive from another device</string>
-    <string name="home_footer">No accounts. No ads.</string>
     <string name="home_send_unavailable">Sending files is not available yet.</string>
     <string name="home_receive_unavailable">Receiving files is not available yet.</string>
 </resources>

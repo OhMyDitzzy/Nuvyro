@@ -136,15 +136,6 @@ private fun HomeContent(
                     onClick = onReceiveClick
                 )
             }
-
-            Text(
-                text = stringResource(R.string.home_footer),
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 28.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
