@@ -21,8 +21,8 @@ class ThemeColorPreviewProvider : PreviewParameterProvider<ThemeColor> {
     override val values: Sequence<ThemeColor> = ThemeColor.entries.asSequence()
 }
 
-@Preview(name = "Terang", uiMode = Configuration.UI_MODE_NIGHT_NO, widthDp = 360)
-@Preview(name = "Gelap", uiMode = Configuration.UI_MODE_NIGHT_YES, widthDp = 360)
+@Preview(name = "Light", uiMode = Configuration.UI_MODE_NIGHT_NO, widthDp = 360)
+@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, widthDp = 360)
 @Composable
 private fun NuvyroThemePreview(
     @PreviewParameter(ThemeColorPreviewProvider::class) themeColor: ThemeColor
@@ -35,15 +35,15 @@ private fun NuvyroThemePreview(
             ) {
                 Text(
                     text = when (themeColor) {
-                        ThemeColor.Blue -> "Biru"
-                        ThemeColor.Red -> "Merah"
-                        ThemeColor.Yellow -> "Kuning"
-                        ThemeColor.Orange -> "Oranye"
+                        ThemeColor.Blue -> "Blue"
+                        ThemeColor.Red -> "Red"
+                        ThemeColor.Yellow -> "Yellow"
+                        ThemeColor.Orange -> "Orange"
                     },
                     style = MaterialTheme.typography.headlineMedium
                 )
                 Text(
-                    text = "Tema Material 3 Expressive",
+                    text = "Material 3 Expressive theme",
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Surface(
@@ -52,7 +52,7 @@ private fun NuvyroThemePreview(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = MaterialTheme.shapes.large
                 ) {
-                    Text("Warna utama", modifier = Modifier.padding(20.dp))
+                    Text("Primary color", modifier = Modifier.padding(20.dp))
                 }
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -60,13 +60,13 @@ private fun NuvyroThemePreview(
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     shape = MaterialTheme.shapes.large
                 ) {
-                    Text("Warna pelengkap", modifier = Modifier.padding(20.dp))
+                    Text("Tertiary color", modifier = Modifier.padding(20.dp))
                 }
                 Button(onClick = {}) {
-                    Text("Tombol utama")
+                    Text("Primary button")
                 }
                 FilledTonalButton(onClick = {}) {
-                    Text("Tombol sekunder")
+                    Text("Secondary button")
                 }
             }
         }
