@@ -29,6 +29,43 @@ class LanBrowser(private val connectivity: ConnectivityManager?, manager: NsdMan
     private val client = ProfileClient()
     private val resolutions = Mutex()
 
+    fun browseHotspot(network: Network) = channelFlow<LanBrowserEvent> {
+        val properties = connectivity?.getLinkProperties(network) ?: throw IOException("Wi-Fi is unavailable")
+        val gateways = properties.routes.filter { it.isDefaultRoute }.mapNotNull { it.gateway }
+            .filterNot { it.isAnyLocalAddress }.distinct().take(2)
+        if (gateways.isEmpty()) throw IOException("Hotspot gateway is unavailable")
+        send(LanBrowserEvent.Started)
+        var currentId: String? = null
+        var failures = 0
+        while (isActive) {
+            var found: NearbyReceiver? = null
+            for (gateway in gateways) {
+                try {
+                    found = client.fetchHotspot(network, gateway, properties.linkAddresses)
+                    break
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    // Try the other address family before treating the host as unavailable.
+                }
+            }
+            val receiver = found
+            if (receiver != null) {
+                currentId?.takeIf { it != receiver.id }?.let { send(LanBrowserEvent.Lost(it)) }
+                currentId = receiver.id
+                failures = 0
+                send(LanBrowserEvent.Updated(receiver))
+            } else {
+                failures++
+                if (failures >= 2) {
+                    currentId?.let { send(LanBrowserEvent.Lost(it)) }
+                    currentId = null
+                }
+            }
+            delay(8_000)
+        }
+    }
+
     fun browse(network: Network) = channelFlow<LanBrowserEvent> {
         val links = connectivity?.getLinkProperties(network)?.linkAddresses
             ?: throw IOException("Wi-Fi is unavailable")

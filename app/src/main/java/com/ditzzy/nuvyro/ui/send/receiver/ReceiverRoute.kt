@@ -3,6 +3,10 @@ package com.ditzzy.nuvyro.ui.send.receiver
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import com.ditzzy.nuvyro.data.lan.LanMode
 import com.ditzzy.nuvyro.data.lan.LanState
 import com.ditzzy.nuvyro.data.lan.LanStatus
@@ -13,11 +17,28 @@ import com.ditzzy.nuvyro.ui.lan.rememberLanPermissionState
 import com.ditzzy.nuvyro.ui.send.ReceiverScreen
 import com.ditzzy.nuvyro.ui.send.SendUiState
 import com.ditzzy.nuvyro.ui.send.SendViewModel
+import com.ditzzy.nuvyro.ui.hotspot.ConnectionGuideEntry
+import com.ditzzy.nuvyro.ui.hotspot.ConnectionGuideRoute
 
 @Composable
 fun ReceiverRoute(state: SendUiState, viewModel: SendViewModel, lan: LanState, lanViewModel: LanViewModel) {
+    var showConnectionGuide by rememberSaveable { mutableStateOf(false) }
+    if (showConnectionGuide) {
+        ConnectionGuideRoute(
+            receiving = false,
+            onBack = {
+                lanViewModel.useHotspotConnection(false)
+                showConnectionGuide = false
+            },
+            onFindReceiver = {
+                lanViewModel.useHotspotConnection(true)
+                showConnectionGuide = false
+            }
+        )
+        return
+    }
     val permission = rememberLanPermissionState()
-    LanSessionEffect(LanMode.Browse, permission.granted, lanViewModel)
+    LanSessionEffect(if (lan.hotspotConnection) LanMode.BrowseHotspot else LanMode.Browse, permission.granted, lanViewModel)
     val discovery = remember(lan.status, lan.receivers) {
         ReceiverDiscoveryUiState(
             status = when (lan.status) {
@@ -38,6 +59,9 @@ fun ReceiverRoute(state: SendUiState, viewModel: SendViewModel, lan: LanState, l
         onEditFiles = viewModel::showFiles,
         onBack = viewModel::back,
         onSelectReceiver = viewModel::selectReceiver,
-        statusActions = { LanActions(lan.status, permission, lanViewModel::retry) }
+        statusActions = {
+            LanActions(lan.status, permission, lanViewModel::retry)
+            ConnectionGuideEntry(onClick = { showConnectionGuide = true })
+        }
     )
 }

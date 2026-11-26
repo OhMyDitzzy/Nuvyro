@@ -28,7 +28,10 @@ class LanViewModel(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(
-        LanState(receiving = savedStateHandle.get<Boolean>("receiving") ?: false)
+        LanState(
+            receiving = savedStateHandle.get<Boolean>("receiving") ?: false,
+            hotspotConnection = savedStateHandle.get<Boolean>("hotspot_connection") ?: false
+        )
     )
     val state = mutableState.asStateFlow()
     private var session: Job? = null
@@ -43,6 +46,11 @@ class LanViewModel(
         pause()
         savedStateHandle["receiving"] = false
         mutableState.update { it.copy(receiving = false) }
+    }
+
+    fun useHotspotConnection(enabled: Boolean) {
+        savedStateHandle["hotspot_connection"] = enabled
+        mutableState.update { it.copy(hotspotConnection = enabled) }
     }
 
     fun start(mode: LanMode) {
@@ -70,7 +78,9 @@ class LanViewModel(
                             mutableState.update { it.copy(status = LanStatus.Active) }
                         }
                     } else {
-                        browser.browse(network).collect { event ->
+                        val events = if (mode == LanMode.BrowseHotspot) browser.browseHotspot(network)
+                            else browser.browse(network)
+                        events.collect { event ->
                             mutableState.update { current ->
                                 when (event) {
                                     LanBrowserEvent.Started -> current.copy(status = LanStatus.Active)

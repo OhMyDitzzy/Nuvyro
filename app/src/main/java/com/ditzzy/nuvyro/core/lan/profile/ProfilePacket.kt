@@ -15,6 +15,7 @@ internal object ProfileProtocol {
     const val Magic = 0x4e565031
     const val Version = 1
     const val MaxPhotoBytes = 32 * 1024
+    const val HotspotPort = 47738
 
     fun write(output: DataOutputStream, packet: ProfilePacket) {
         output.writeInt(Magic)

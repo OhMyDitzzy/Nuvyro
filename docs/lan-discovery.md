@@ -60,6 +60,59 @@ four seconds overall or on cancellation. The server permits four clients and
 closes each request after three seconds. The listener checks cancellation at
 least every 500 ms and closes accepted sockets during shutdown.
 
+## Temporary hotspot
+
+Both Receive and the receiver radar offer a connection guide, even if the phone
+already has Wi-Fi: a Wi-Fi connection does not prove both phones share a LAN.
+The receiver can create an Android `LocalOnlyHotspot` on API 26 and later. Android
+generates its network name and password. The sender joins using system Wi-Fi
+settings, returns to the guide, and selects **Find receiver**. Internet access
+is not required; Android may ask the sender to stay on the network without
+Internet. Joining is manual in this version, without network suggestions or an
+app-scoped Wi-Fi request.
+
+`NEARBY_WIFI_DEVICES` is requested on API 33 and later with `neverForLocation`.
+Earlier versions request fine/coarse location (manifest capped at API 32) and
+require Location services enabled as required by Android's hotspot API.
+`ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE` are also declared. Devices before
+API 26, or devices that cannot start a local hotspot, are directed to shared
+Wi-Fi. Starting a hotspot can interrupt the receiver's current Wi-Fi on devices
+that do not support concurrent AP/client operation.
+
+The hotspot has no client `Network` on the receiving phone, so this path does
+not rely on NSD on the access point. The host serves the same bounded profile
+protocol on TCP port **47738**. Incoming requests must use a local interface
+outside known client/VPN networks and originate on that interface's subnet.
+This policy is evaluated for each accepted socket. The sender uses the default
+gateway(s) reported by its selected Wi-Fi `LinkProperties`, checks the subnet,
+and fetches the host profile using a socket bound to that Wi-Fi `Network`.
+No gateway IP is hardcoded. Only the explicit **Find receiver** hotspot flow
+enables gateway probing; shared Wi-Fi continues to use NSD.
+
+The host response provides its session UUID, which becomes the receiver ID.
+This path has no TXT record to compare against; the UUID provides session
+continuity and is not an authentication credential. The polling interval,
+two-failure removal rule, packet limits, socket deadlines and trust boundary
+remain the same as for LAN discovery. Gateway browsing checks at most two
+address-family candidates. A port conflict prevents hotspot readiness instead
+of silently choosing a port the sender cannot discover.
+
+Creation has a 20-second timeout. Credentials are held in memory only, without
+preferences or saved-state storage. Leaving the guide, backgrounding, or rotating
+the host screen releases its reservation, cancels the server, and clears the
+credentials. A late `onStarted` callback after cancellation closes its reservation.
+The user starts a new session explicitly after returning. The system hotspot is
+shared if other apps hold reservations; releasing Nuvyro's reservation ends
+Nuvyro's session and allows Android to stop the hotspot when no reservations
+remain. No service keeps the hotspot alive in the background.
+
+The connection guide does not implement file transfer or change the transfer
+security requirements below. Hotspot creation, Wi-Fi settings return, gateway
+reachability, interface filtering, and phone-specific AP behavior still require
+testing on two physical devices; static checks cannot verify those paths.
+
+Android reference: [local-only hotspot](https://developer.android.com/develop/connectivity/wifi/localonlyhotspot).
+
 ## Trust boundary and next stage
 
 Discovery and profile exchange are unauthenticated and unencrypted. They expose

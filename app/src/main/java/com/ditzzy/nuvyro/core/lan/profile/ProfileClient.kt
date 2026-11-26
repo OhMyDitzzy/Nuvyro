@@ -9,6 +9,7 @@ import com.ditzzy.nuvyro.data.lan.NearbyReceiver
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -29,24 +30,33 @@ internal class ProfileClient {
             }
             val addresses = if (Build.VERSION.SDK_INT >= 34) info.hostAddresses else listOfNotNull(info.host)
             val host = addresses.firstOrNull { isOnLan(it, links) } ?: throw IOException("Receiver is outside this LAN")
-            coroutineScope {
-                network.socketFactory.createSocket().use { socket ->
-                    val cancellationCloser = launch(start = CoroutineStart.UNDISPATCHED) {
-                        try { awaitCancellation() } finally { runCatching { socket.close() } }
-                    }
-                    val deadline = launch { delay(4_000); runCatching { socket.close() } }
-                    try {
-                        socket.soTimeout = 2_000
-                        socket.connect(InetSocketAddress(host, info.port), 2_000)
-                        DataOutputStream(socket.getOutputStream()).apply { writeInt(ProfileProtocol.Magic); flush() }
-                        val packet = ProfileProtocol.read(DataInputStream(socket.getInputStream()))
-                        if (packet.sessionId != id) throw IOException("Receiver session changed")
-                        NearbyReceiver(info.serviceName, packet.name, DiscoveryPhoto.decode(packet.photo))
-                    } finally {
-                        deadline.cancel()
-                        cancellationCloser.cancel()
-                    }
-                }
+            val packet = request(network, host, info.port)
+            if (packet.sessionId != id) throw IOException("Receiver session changed")
+            NearbyReceiver(info.serviceName, packet.name, DiscoveryPhoto.decode(packet.photo))
+        }
+
+    suspend fun fetchHotspot(network: Network, gateway: InetAddress, links: List<LinkAddress>): NearbyReceiver =
+        withContext(Dispatchers.IO) {
+            if (!isOnLan(gateway, links)) throw IOException("Hotspot is outside this LAN")
+            val packet = request(network, gateway, ProfileProtocol.HotspotPort)
+            NearbyReceiver("Nuvyro-${packet.sessionId}", packet.name, DiscoveryPhoto.decode(packet.photo))
+        }
+
+    private suspend fun request(network: Network, host: InetAddress, port: Int): ProfilePacket = coroutineScope {
+        network.socketFactory.createSocket().use { socket ->
+            val cancellationCloser = launch(start = CoroutineStart.UNDISPATCHED) {
+                try { awaitCancellation() } finally { runCatching { socket.close() } }
+            }
+            val deadline = launch { delay(4_000); runCatching { socket.close() } }
+            try {
+                socket.soTimeout = 2_000
+                socket.connect(InetSocketAddress(host, port), 2_000)
+                DataOutputStream(socket.getOutputStream()).apply { writeInt(ProfileProtocol.Magic); flush() }
+                ProfileProtocol.read(DataInputStream(socket.getInputStream()))
+            } finally {
+                deadline.cancel()
+                cancellationCloser.cancel()
             }
         }
+    }
 }

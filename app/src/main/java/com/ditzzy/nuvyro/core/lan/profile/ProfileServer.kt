@@ -1,7 +1,5 @@
 package com.ditzzy.nuvyro.core.lan.profile
 
-import android.net.LinkAddress
-import com.ditzzy.nuvyro.core.lan.isOnLan
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -18,10 +16,11 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 
 internal class ProfileServer(
-    private val links: List<LinkAddress>,
-    private val packet: ProfilePacket
+    private val packet: ProfilePacket,
+    port: Int = 0,
+    private val allowsPeer: (Socket) -> Boolean
 ) : Closeable {
-    private val server = ServerSocket(0, 8).apply { soTimeout = 500 }
+    private val server = ServerSocket(port, 8).apply { soTimeout = 500 }
     private val sockets = ConcurrentHashMap.newKeySet<Socket>()
     val port: Int get() = server.localPort
 
@@ -31,8 +30,8 @@ internal class ProfileServer(
             try {
                 while (isActive) {
                     val socket = try { server.accept() } catch (_: SocketTimeoutException) { continue }
-                    val wifiInterface = links.any { it.address == socket.localAddress }
-                    if (!wifiInterface || !isOnLan(socket.inetAddress, links) || !clients.tryAcquire()) {
+                    val allowed = runCatching { allowsPeer(socket) }.getOrDefault(false)
+                    if (!allowed || !clients.tryAcquire()) {
                         runCatching { socket.close() }
                         continue
                     }

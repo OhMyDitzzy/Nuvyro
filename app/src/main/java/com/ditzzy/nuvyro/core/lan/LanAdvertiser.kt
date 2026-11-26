@@ -3,8 +3,10 @@ package com.ditzzy.nuvyro.core.lan
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.nsd.NsdManager
+import com.ditzzy.nuvyro.core.hotspot.HotspotPeerAccess
 import com.ditzzy.nuvyro.core.lan.profile.DiscoveryPhoto
 import com.ditzzy.nuvyro.core.lan.profile.ProfilePacket
+import com.ditzzy.nuvyro.core.lan.profile.ProfileProtocol
 import com.ditzzy.nuvyro.core.lan.profile.ProfileServer
 import com.ditzzy.nuvyro.core.profile.ProfilePhotoStore
 import com.ditzzy.nuvyro.data.profile.ProfilePreferences
@@ -27,17 +29,13 @@ class LanAdvertiser(
     private val nsd = LanNsd(manager)
 
     suspend fun advertise(network: Network, onReady: () -> Unit) = coroutineScope {
-        val packet = withContext(Dispatchers.IO) {
-            val profile = profiles.load()
-            ProfilePacket(
-                UUID.randomUUID().toString(), profile.displayName,
-                DiscoveryPhoto.encode(photos.load(profile.photoFileName))
-            )
-        }
+        val packet = prepareProfile()
         val links = connectivity?.getLinkProperties(network)?.linkAddresses.orEmpty()
         if (links.isEmpty()) throw IOException("Wi-Fi has no local address")
         withContext(Dispatchers.IO) {
-            ProfileServer(links, packet).use { server ->
+            ProfileServer(packet, allowsPeer = { socket ->
+                links.any { it.address == socket.localAddress } && isOnLan(socket.inetAddress, links)
+            }).use { server ->
                 coroutineScope {
                     val serving = launch { server.serve() }
                     try {
@@ -48,5 +46,21 @@ class LanAdvertiser(
                 }
             }
         }
+    }
+
+    suspend fun serveHotspot(onReady: () -> Unit) = withContext(Dispatchers.IO) {
+        val access = HotspotPeerAccess(connectivity)
+        ProfileServer(prepareProfile(), ProfileProtocol.HotspotPort, access::allows).use { server ->
+            onReady()
+            server.serve()
+        }
+    }
+
+    private suspend fun prepareProfile(): ProfilePacket = withContext(Dispatchers.IO) {
+        val profile = profiles.load()
+        ProfilePacket(
+            UUID.randomUUID().toString(), profile.displayName,
+            DiscoveryPhoto.encode(photos.load(profile.photoFileName))
+        )
     }
 }
