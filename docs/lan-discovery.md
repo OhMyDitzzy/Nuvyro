@@ -70,7 +70,7 @@ The receiver can create an Android `LocalOnlyHotspot` on API 26 and later. Andro
 generates its network name and password. The hotspot card displays a Wi-Fi QR
 code alongside the credentials. The sender scans it with a camera or the QR
 scanner in system Wi-Fi settings, confirms joining, and returns to the Nuvyro
-receiver radar. The guide also offers **Find receiver** to return to the radar.
+receiver radar. The guide also offers **Back to radar** to return to the radar.
 Internet access is not required; Android may ask the sender to stay on the
 network without Internet. System Wi-Fi settings and the scanner handle joining; Nuvyro does not
 use network suggestions, an app-scoped Wi-Fi request, or an in-app camera scanner.
@@ -116,14 +116,27 @@ remain the same as for LAN discovery. Gateway browsing checks at most two
 address-family candidates. A port conflict prevents hotspot readiness instead
 of silently choosing a port the sender cannot discover.
 
-Creation has a 20-second timeout. Credentials are held in memory only, without
-preferences or saved-state storage. Leaving the guide, backgrounding, or rotating
-the host screen releases its reservation, cancels the server, and clears the
-credentials. A late `onStarted` callback after cancellation closes its reservation.
-The user starts a new session explicitly after returning. The system hotspot is
+Creation has a 20-second timeout. The Receive session owns the hotspot and profile
+server, with the same lifetime on the Receive screen and its connection details.
+**Continue receiving** or Back from the QR details keeps the session alive;
+Receive shows **Hotspot is on**, the network name, **Show Wi-Fi QR**, and **Stop
+hotspot**. Shared Wi-Fi advertising stays available in the connection details
+until hotspot startup takes over. While the hotspot is starting or active, the
+hotspot server owns availability and regular Wi-Fi advertising is paused.
+
+Credentials are held in memory only, without preferences or saved-state storage.
+**Stop hotspot**, **Stop receiving**, backgrounding, rotating, or leaving Receive
+releases the reservation, cancels the server, and clears the credentials.
+A late `onStarted` callback after cancellation closes its reservation.
+After a lifecycle pause, the user starts a new session explicitly. The system hotspot is
 shared if other apps hold reservations; releasing Nuvyro's reservation ends
 Nuvyro's session and allows Android to stop the hotspot when no reservations
 remain. No service keeps the hotspot alive in the background.
+
+Sender discovery also stays active while the connection guide is open and resumes
+when the sender returns from Wi-Fi settings or the system scanner. The guide
+shows the discovered receiver count, and **Back to radar** only changes the page;
+it does not start a separate discovery session.
 
 The connection guide does not implement file transfer or change the transfer
 security requirements below. Hotspot creation, Wi-Fi settings return, gateway

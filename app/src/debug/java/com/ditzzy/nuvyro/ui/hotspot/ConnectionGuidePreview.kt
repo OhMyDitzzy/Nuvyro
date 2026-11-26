@@ -18,7 +18,6 @@ import com.ditzzy.nuvyro.data.hotspot.HotspotStatus
 import com.ditzzy.nuvyro.ui.theme.NuvyroTheme
 
 data class GuidePreviewState(
-    val receiving: Boolean = true,
     val hotspot: HotspotState = HotspotState(),
     val supported: Boolean = true
 )
@@ -32,28 +31,38 @@ class ConnectionGuidePreviewProvider : PreviewParameterProvider<GuidePreviewStat
         )),
         GuidePreviewState(hotspot = HotspotState(HotspotStatus.Failed)),
         GuidePreviewState(hotspot = HotspotState(HotspotStatus.Paused)),
-        GuidePreviewState(supported = false),
-        GuidePreviewState(receiving = false)
+        GuidePreviewState(supported = false)
     )
 }
 
-@Preview(name = "Connection guide light", widthDp = 360, heightDp = 800)
-@Preview(name = "Connection guide dark", uiMode = Configuration.UI_MODE_NIGHT_YES, widthDp = 360, heightDp = 800)
-@Preview(name = "Connection guide small screen", widthDp = 320, heightDp = 568)
-@Preview(name = "Connection guide large text", widthDp = 360, heightDp = 800, fontScale = 1.5f)
+@Preview(name = "Hotspot setup light", widthDp = 360, heightDp = 800)
+@Preview(name = "Hotspot setup dark", uiMode = Configuration.UI_MODE_NIGHT_YES, widthDp = 360, heightDp = 800)
+@Preview(name = "Hotspot setup small screen", widthDp = 320, heightDp = 568)
+@Preview(name = "Hotspot setup large text", widthDp = 360, heightDp = 800, fontScale = 1.5f)
 @Composable
 private fun ConnectionGuidePreview(@PreviewParameter(ConnectionGuidePreviewProvider::class) state: GuidePreviewState) {
     NuvyroTheme {
-        ConnectionGuideScreen(
-            state.receiving, state.hotspot, state.supported,
-            onBack = {}, onOpenWifi = {}, onFindReceiver = {}
+        HotspotSetupScreen(
+            state.hotspot, state.supported,
+            onBack = {}, onOpenWifi = {}, onStopHotspot = {}
         ) {
-            if (state.receiving && state.supported && state.hotspot.status != HotspotStatus.Active &&
+            if (state.supported && state.hotspot.status != HotspotStatus.Active &&
                 state.hotspot.status != HotspotStatus.Starting
             ) {
                 FilledTonalButton(onClick = {}) { Text("Create hotspot") }
             }
         }
+    }
+}
+
+@Preview(name = "Sender connection guide light", widthDp = 360, heightDp = 800)
+@Preview(name = "Sender connection guide dark", uiMode = Configuration.UI_MODE_NIGHT_YES, widthDp = 360, heightDp = 800)
+@Preview(name = "Sender connection guide small screen", widthDp = 320, heightDp = 568)
+@Preview(name = "Sender connection guide large text", widthDp = 360, heightDp = 800, fontScale = 1.5f)
+@Composable
+private fun SenderConnectionGuidePreview() {
+    NuvyroTheme {
+        ConnectionGuideScreen(receiverCount = 1, onBack = {}, onOpenWifi = {}, onShowRadar = {})
     }
 }
 

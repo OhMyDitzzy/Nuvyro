@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.ditzzy.nuvyro.R
+import com.ditzzy.nuvyro.data.hotspot.HotspotState
 import com.ditzzy.nuvyro.data.lan.LanStatus
 import com.ditzzy.nuvyro.ui.profile.components.ProfileAvatar
 import com.ditzzy.nuvyro.ui.send.components.SendScaffold
@@ -35,8 +36,10 @@ fun ReceiveScreen(
     name: String,
     photo: Bitmap?,
     onStop: () -> Unit,
+    hotspot: HotspotState = HotspotState(),
     actions: @Composable () -> Unit = {}
 ) {
+    val availability = receiveAvailability(status, hotspot.status)
     SendScaffold(
         title = stringResource(R.string.home_receive),
         onBack = onStop,
@@ -55,29 +58,17 @@ fun ReceiveScreen(
             ) {
                 ProfileAvatar(name, photo, Modifier.size(96.dp))
                 Text(name, style = MaterialTheme.typography.headlineSmall)
-                if (status == LanStatus.Starting) CircularProgressIndicator()
+                if (availability.starting) CircularProgressIndicator()
                 Column(
                     modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = stringResource(when (status) {
-                            LanStatus.Active -> R.string.receive_available
-                            LanStatus.Starting -> R.string.lan_starting
-                            LanStatus.PermissionRequired -> R.string.lan_permission_title
-                            LanStatus.NoWifi -> R.string.lan_wifi_title
-                            LanStatus.Paused -> R.string.receive_paused
-                            LanStatus.Failed -> R.string.receive_failed
-                        }),
+                        text = stringResource(availability.title),
                         style = MaterialTheme.typography.titleLarge
                     )
                     Text(
-                        text = stringResource(when (status) {
-                            LanStatus.PermissionRequired -> R.string.lan_permission_hint
-                            LanStatus.NoWifi -> R.string.lan_wifi_hint
-                            LanStatus.Failed -> R.string.receive_failed_hint
-                            else -> R.string.receive_visibility_hint
-                        }),
+                        text = stringResource(availability.hint),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

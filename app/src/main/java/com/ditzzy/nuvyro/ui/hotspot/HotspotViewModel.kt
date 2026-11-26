@@ -49,10 +49,18 @@ class HotspotViewModel(private val hotspot: LocalHotspot, private val advertiser
     }
 
     fun stop() {
+        endSession(HotspotStatus.Idle)
+    }
+
+    fun pause() {
+        if (state.value.status == HotspotStatus.Starting || state.value.status == HotspotStatus.Active) {
+            endSession(HotspotStatus.Paused)
+        }
+    }
+
+    private fun endSession(status: HotspotStatus) {
         generation.incrementAndGet()
         session?.cancel()
-        mutableState.update {
-            HotspotState(if (it.status == HotspotStatus.Idle) HotspotStatus.Idle else HotspotStatus.Paused)
-        }
+        mutableState.value = HotspotState(status = status)
     }
 }

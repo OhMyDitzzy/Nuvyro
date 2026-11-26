@@ -23,16 +23,16 @@ import com.ditzzy.nuvyro.ui.hotspot.ConnectionGuideRoute
 @Composable
 fun ReceiverRoute(state: SendUiState, viewModel: SendViewModel, lan: LanState, lanViewModel: LanViewModel) {
     var showConnectionGuide by rememberSaveable { mutableStateOf(false) }
+    val permission = rememberLanPermissionState()
+    LanSessionEffect(LanMode.Browse, permission.granted, lanViewModel)
     if (showConnectionGuide) {
         ConnectionGuideRoute(
-            receiving = false,
+            receiverCount = lan.receivers.size,
             onBack = { showConnectionGuide = false },
-            onFindReceiver = { showConnectionGuide = false }
+            onShowRadar = { showConnectionGuide = false }
         )
         return
     }
-    val permission = rememberLanPermissionState()
-    LanSessionEffect(LanMode.Browse, permission.granted, lanViewModel)
     val discovery = remember(lan.status, lan.receivers) {
         ReceiverDiscoveryUiState(
             status = when (lan.status) {

@@ -5,9 +5,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.ditzzy.nuvyro.data.lan.LanMode
 
 @Composable
-fun LanSessionEffect(mode: LanMode, permissionGranted: Boolean, viewModel: LanViewModel) {
-    LifecycleResumeEffect(mode, permissionGranted) {
-        viewModel.start(mode)
+fun LanSessionEffect(mode: LanMode, permissionGranted: Boolean, viewModel: LanViewModel, enabled: Boolean = true) {
+    LifecycleResumeEffect(mode, permissionGranted, enabled) {
+        if (enabled) viewModel.start(mode) else viewModel.pause()
         onPauseOrDispose { viewModel.pause() }
     }
 }

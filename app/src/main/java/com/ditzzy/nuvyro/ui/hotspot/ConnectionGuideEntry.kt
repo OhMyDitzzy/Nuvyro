@@ -16,11 +16,17 @@ import androidx.compose.ui.unit.dp
 import com.ditzzy.nuvyro.R
 
 @Composable
-fun ConnectionGuideEntry(onClick: () -> Unit) {
+fun ConnectionGuideEntry(receiving: Boolean = false, onClick: () -> Unit) {
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.connection_help_title), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.connection_help_hint), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                stringResource(if (receiving) R.string.connection_receive_title else R.string.connection_help_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                stringResource(if (receiving) R.string.connection_receive_hint else R.string.connection_help_hint),
+                style = MaterialTheme.typography.bodyMedium
+            )
             OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth().sizeIn(minHeight = 48.dp)) {
                 Text(stringResource(R.string.connection_title))
             }
