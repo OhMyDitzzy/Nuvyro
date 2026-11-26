@@ -62,6 +62,13 @@ class SendViewModel(
         mutableState.update { it.copy(step = SendStep.Receiver) }
     }
 
+    fun selectReceiver(id: String) {
+        mutableState.update { current ->
+            if (current.receiverDiscovery.receivers.none { it.id == id }) current
+            else current.copy(receiverDiscovery = current.receiverDiscovery.copy(selectedId = id))
+        }
+    }
+
     fun beginPicking(): Boolean {
         if (state.value.busy) return false
         savedStateHandle["picking"] = true

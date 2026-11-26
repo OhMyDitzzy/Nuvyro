@@ -33,7 +33,8 @@ fun SendRoute(state: SendUiState, viewModel: SendViewModel) {
         SendStep.Receiver -> ReceiverScreen(
             state = state,
             onEditFiles = viewModel::showFiles,
-            onBack = viewModel::back
+            onBack = viewModel::back,
+            onSelectReceiver = viewModel::selectReceiver
         )
     }
 }
