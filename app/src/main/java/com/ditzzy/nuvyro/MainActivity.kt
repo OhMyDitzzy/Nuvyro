@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.ditzzy.nuvyro.ui.home.HomeScreen
+import com.ditzzy.nuvyro.ui.NuvyroApp
 import com.ditzzy.nuvyro.ui.theme.NuvyroTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NuvyroTheme {
-                HomeScreen()
+                NuvyroApp()
             }
         }
     }
