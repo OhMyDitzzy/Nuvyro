@@ -89,6 +89,7 @@ fun ConnectionGuideScreen(
                         ) {
                             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text(stringResource(R.string.hotspot_ready), style = MaterialTheme.typography.titleLarge)
+                                HotspotWifiQr(credentials)
                                 SelectionContainer {
                                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         Text(stringResource(R.string.hotspot_network_name, credentials.ssid))

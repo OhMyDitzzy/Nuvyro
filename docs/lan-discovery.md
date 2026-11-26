@@ -22,12 +22,14 @@ process. This implementation does not require AIDL or a Rust toolchain.
   Send/Receive. `INTERNET` and `ACCESS_NETWORK_STATE` are manifest permissions;
   using this LAN feature does not require an Internet connection.
 
-NSD discovery must report that it started before the radar enters `Searching`.
+The radar enters `Searching` when NSD starts or the hotspot gateway polling loop
+starts. Both discovery paths run on the selected Wi-Fi network.
 Missing permission, missing Wi-Fi, startup, pause, and failure have separate UI
 states. Backgrounding or leaving the screen cancels network callbacks, NSD,
 profile polling, and the profile server. Receive becomes available again when
-its screen resumes. NSD startup has a ten-second timeout and a retry action on
-failure. No foreground service is started.
+its screen resumes. NSD startup has a ten-second timeout; discovery failures
+retry after eight seconds while gateway polling continues. Permission failures
+stop the session and show the permission action. No foreground service is started.
 
 The browser tracks up to 32 services, serializes NSD resolution, and permits up
 to four concurrent profile checks. Known services are checked every eight
@@ -65,11 +67,25 @@ least every 500 ms and closes accepted sockets during shutdown.
 Both Receive and the receiver radar offer a connection guide, even if the phone
 already has Wi-Fi: a Wi-Fi connection does not prove both phones share a LAN.
 The receiver can create an Android `LocalOnlyHotspot` on API 26 and later. Android
-generates its network name and password. The sender joins using system Wi-Fi
-settings, returns to the guide, and selects **Find receiver**. Internet access
-is not required; Android may ask the sender to stay on the network without
-Internet. Joining is manual in this version, without network suggestions or an
-app-scoped Wi-Fi request.
+generates its network name and password. The hotspot card displays a Wi-Fi QR
+code alongside the credentials. The sender scans it with a camera or the QR
+scanner in system Wi-Fi settings, confirms joining, and returns to the Nuvyro
+receiver radar. The guide also offers **Find receiver** to return to the radar.
+Internet access is not required; Android may ask the sender to stay on the
+network without Internet. System Wi-Fi settings and the scanner handle joining; Nuvyro does not
+use network suggestions, an app-scoped Wi-Fi request, or an in-app camera scanner.
+
+The QR uses the `WIFI:T:...;S:...;P:...;;` format recognized by Android Wi-Fi
+settings, with `WPA` for WPA2/transition mode and `SAE` for WPA3-only hotspots.
+Backslashes, semicolons, commas, colons and quotes in credentials are escaped.
+ZXing Core 3.5.4 encodes the QR locally with UTF-8, medium error correction,
+and a four-module quiet zone. The UI draws black modules on white at integer
+pixel boundaries in both themes. Encoding runs off the UI thread; failure
+leaves the manual credentials available. The QR is held only in the active UI
+session, without saving an image or logging the payload. Scanning support and
+WPA3 support depend on the sender's system scanner.
+
+Format reference: [Android Wi-Fi QR parser](https://android.googlesource.com/platform/packages/apps/Settings/+/refs/heads/main/src/com/android/settings/wifi/dpp/WifiQrCode.java).
 
 `NEARBY_WIFI_DEVICES` is requested on API 33 and later with `neverForLocation`.
 Earlier versions request fine/coarse location (manifest capped at API 32) and
@@ -86,8 +102,11 @@ outside known client/VPN networks and originate on that interface's subnet.
 This policy is evaluated for each accepted socket. The sender uses the default
 gateway(s) reported by its selected Wi-Fi `LinkProperties`, checks the subnet,
 and fetches the host profile using a socket bound to that Wi-Fi `Network`.
-No gateway IP is hardcoded. Only the explicit **Find receiver** hotspot flow
-enables gateway probing; shared Wi-Fi continues to use NSD.
+No gateway IP is hardcoded. The ordinary radar also polls the Wi-Fi gateway on
+this single profile port, alongside NSD; joining a hotspot no longer requires
+selecting a separate discovery mode. Every poll reads fresh `LinkProperties`
+so late DHCP routes or a changed gateway do not leave discovery using an empty
+or outdated snapshot. Missing gateways are retried instead of failing startup.
 
 The host response provides its session UUID, which becomes the receiver ID.
 This path has no TXT record to compare against; the UUID provides session

@@ -26,19 +26,13 @@ fun ReceiverRoute(state: SendUiState, viewModel: SendViewModel, lan: LanState, l
     if (showConnectionGuide) {
         ConnectionGuideRoute(
             receiving = false,
-            onBack = {
-                lanViewModel.useHotspotConnection(false)
-                showConnectionGuide = false
-            },
-            onFindReceiver = {
-                lanViewModel.useHotspotConnection(true)
-                showConnectionGuide = false
-            }
+            onBack = { showConnectionGuide = false },
+            onFindReceiver = { showConnectionGuide = false }
         )
         return
     }
     val permission = rememberLanPermissionState()
-    LanSessionEffect(if (lan.hotspotConnection) LanMode.BrowseHotspot else LanMode.Browse, permission.granted, lanViewModel)
+    LanSessionEffect(LanMode.Browse, permission.granted, lanViewModel)
     val discovery = remember(lan.status, lan.receivers) {
         ReceiverDiscoveryUiState(
             status = when (lan.status) {
