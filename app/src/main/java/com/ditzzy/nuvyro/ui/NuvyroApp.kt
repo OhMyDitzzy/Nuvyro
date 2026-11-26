@@ -23,6 +23,9 @@ import com.ditzzy.nuvyro.ui.home.HomeScreen
 import com.ditzzy.nuvyro.ui.profile.ProfileRoute
 import com.ditzzy.nuvyro.ui.profile.ProfileViewModel
 import com.ditzzy.nuvyro.ui.profile.ProfileViewModelFactory
+import com.ditzzy.nuvyro.ui.send.SendRoute
+import com.ditzzy.nuvyro.ui.send.SendViewModel
+import com.ditzzy.nuvyro.ui.send.SendViewModelFactory
 import com.ditzzy.nuvyro.ui.setup.SetupRoute
 import com.ditzzy.nuvyro.ui.setup.SetupViewModel
 import com.ditzzy.nuvyro.ui.setup.SetupViewModelFactory
@@ -36,6 +39,9 @@ fun NuvyroApp() {
     val profileFactory = remember(context.applicationContext) { ProfileViewModelFactory(context) }
     val profileViewModel: ProfileViewModel = viewModel(factory = profileFactory)
     val profileState by profileViewModel.state.collectAsStateWithLifecycle()
+    val sendFactory = remember(context.applicationContext) { SendViewModelFactory(context) }
+    val sendViewModel: SendViewModel = viewModel(factory = sendFactory)
+    val sendState by sendViewModel.state.collectAsStateWithLifecycle()
 
     when {
         state.loading -> Scaffold { innerPadding ->
@@ -54,13 +60,14 @@ fun NuvyroApp() {
                 }
             }
         }
-        state.completed -> if (profileState.editing) {
-            ProfileRoute(profileState, profileViewModel)
-        } else {
-            HomeScreen(
+        state.completed -> when {
+            profileState.editing -> ProfileRoute(profileState, profileViewModel)
+            sendState.active -> SendRoute(sendState, sendViewModel)
+            else -> HomeScreen(
                 profileName = profileState.profile?.displayName.orEmpty(),
                 profilePhoto = profileState.savedPhoto,
-                onProfileClick = profileViewModel::beginEditing
+                onProfileClick = profileViewModel::beginEditing,
+                onSendClick = sendViewModel::open
             )
         }
         else -> SetupRoute(state, setupViewModel, profileState, profileViewModel)

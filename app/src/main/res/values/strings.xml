@@ -6,8 +6,32 @@
     <string name="home_send_description">Choose files to share</string>
     <string name="home_receive">Receive</string>
     <string name="home_receive_description">Receive from another device</string>
-    <string name="home_send_unavailable">Sending files is not available yet.</string>
     <string name="home_receive_unavailable">Receiving files is not available yet.</string>
+    <string name="send_files_title">Choose files</string>
+    <string name="send_files_description">Choose what you want to share. You can add more files or remove any before continuing.</string>
+    <string name="send_choose_files">Choose files</string>
+    <string name="send_add_files">Add files</string>
+    <string name="send_empty_title">Your files go here</string>
+    <string name="send_empty_description">Choose documents, photos, videos, or other files to get started.</string>
+    <string name="send_reading_files">Reading file details…</string>
+    <string name="send_unnamed_file">Unnamed file</string>
+    <string name="send_size_unknown">Size unknown</string>
+    <string name="send_total_size">Total: %1$s</string>
+    <string name="send_total_unknown">Total size unavailable</string>
+    <string name="send_remove_file">Remove %1$s</string>
+    <string name="send_error_picker">The file picker could not be opened. Please try again.</string>
+    <string name="send_receiver_title">Choose a receiver</string>
+    <string name="send_receiver_unavailable_title">Your files are ready</string>
+    <string name="send_receiver_unavailable_description">Finding nearby receivers is not available yet. You can go back to review your selected files.</string>
+    <string name="send_edit_files">Edit selected files</string>
+    <plurals name="send_file_count">
+        <item quantity="one">%1$d file selected</item>
+        <item quantity="other">%1$d files selected</item>
+    </plurals>
+    <plurals name="send_files_unavailable">
+        <item quantity="one">%1$d file could not be added or is no longer available. Please choose it again.</item>
+        <item quantity="other">%1$d files could not be added or are no longer available. Please choose them again.</item>
+    </plurals>
     <string name="profile_title">Your profile</string>
     <string name="profile_description">Choose the name and photo people will see when scanning for nearby devices.</string>
     <string name="profile_open">Edit your profile</string>

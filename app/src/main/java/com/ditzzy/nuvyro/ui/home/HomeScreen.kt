@@ -49,11 +49,11 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     profileName: String = "",
     profilePhoto: Bitmap? = null,
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onSendClick: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val sendMessage = stringResource(R.string.home_send_unavailable)
     val receiveMessage = stringResource(R.string.home_receive_unavailable)
     val showMessage: (String) -> Unit = { message ->
         scope.launch {
@@ -70,7 +70,7 @@ fun HomeScreen(
             profileName = profileName,
             profilePhoto = profilePhoto,
             onProfileClick = onProfileClick,
-            onSendClick = { showMessage(sendMessage) },
+            onSendClick = onSendClick,
             onReceiveClick = { showMessage(receiveMessage) },
             modifier = Modifier
                 .fillMaxSize()
