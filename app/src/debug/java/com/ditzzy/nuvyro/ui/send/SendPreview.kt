@@ -53,6 +53,9 @@ private fun SendFilesPreview(@PreviewParameter(SendPreviewProvider::class) state
 class ReceiverPreviewProvider : PreviewParameterProvider<ReceiverDiscoveryUiState> {
     override val values = sequenceOf(
         ReceiverDiscoveryUiState(),
+        ReceiverDiscoveryUiState(status = ReceiverDiscoveryStatus.PermissionRequired),
+        ReceiverDiscoveryUiState(status = ReceiverDiscoveryStatus.NoWifi),
+        ReceiverDiscoveryUiState(status = ReceiverDiscoveryStatus.Starting),
         ReceiverDiscoveryUiState(status = ReceiverDiscoveryStatus.Searching),
         ReceiverDiscoveryUiState(
             status = ReceiverDiscoveryStatus.Searching,

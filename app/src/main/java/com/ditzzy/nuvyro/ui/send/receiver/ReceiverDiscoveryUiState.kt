@@ -3,7 +3,9 @@ package com.ditzzy.nuvyro.ui.send.receiver
 import android.graphics.Bitmap
 
 enum class ReceiverDiscoveryStatus {
-    Unavailable,
+    PermissionRequired,
+    NoWifi,
+    Starting,
     Searching,
     Paused,
     Failed
@@ -16,7 +18,7 @@ data class ReceiverItem(
 )
 
 data class ReceiverDiscoveryUiState(
-    val status: ReceiverDiscoveryStatus = ReceiverDiscoveryStatus.Unavailable,
+    val status: ReceiverDiscoveryStatus = ReceiverDiscoveryStatus.Paused,
     val receivers: List<ReceiverItem> = emptyList(),
     val selectedId: String? = null
 ) {

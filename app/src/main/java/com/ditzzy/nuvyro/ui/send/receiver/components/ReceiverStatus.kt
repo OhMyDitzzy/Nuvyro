@@ -19,7 +19,9 @@ import com.ditzzy.nuvyro.ui.send.receiver.ReceiverDiscoveryUiState
 @Composable
 internal fun ReceiverStatus(state: ReceiverDiscoveryUiState) {
     val title = when (state.status) {
-        ReceiverDiscoveryStatus.Unavailable -> stringResource(R.string.receiver_radar_ready)
+        ReceiverDiscoveryStatus.PermissionRequired -> stringResource(R.string.lan_permission_title)
+        ReceiverDiscoveryStatus.NoWifi -> stringResource(R.string.lan_wifi_title)
+        ReceiverDiscoveryStatus.Starting -> stringResource(R.string.lan_starting)
         ReceiverDiscoveryStatus.Searching -> if (state.receivers.isEmpty()) {
             stringResource(R.string.receiver_searching)
         } else {
@@ -29,7 +31,9 @@ internal fun ReceiverStatus(state: ReceiverDiscoveryUiState) {
         ReceiverDiscoveryStatus.Failed -> stringResource(R.string.receiver_failed)
     }
     val description = when (state.status) {
-        ReceiverDiscoveryStatus.Unavailable -> R.string.send_receiver_unavailable_description
+        ReceiverDiscoveryStatus.PermissionRequired -> R.string.lan_permission_hint
+        ReceiverDiscoveryStatus.NoWifi -> R.string.lan_wifi_hint
+        ReceiverDiscoveryStatus.Starting -> R.string.receiver_starting_hint
         ReceiverDiscoveryStatus.Searching -> R.string.receiver_search_hint
         ReceiverDiscoveryStatus.Paused -> R.string.receiver_paused_hint
         ReceiverDiscoveryStatus.Failed -> R.string.receiver_failed_hint

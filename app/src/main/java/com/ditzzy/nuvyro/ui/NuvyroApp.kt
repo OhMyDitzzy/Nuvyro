@@ -20,9 +20,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ditzzy.nuvyro.R
 import com.ditzzy.nuvyro.ui.home.HomeScreen
+import com.ditzzy.nuvyro.ui.lan.LanViewModel
+import com.ditzzy.nuvyro.ui.lan.LanViewModelFactory
 import com.ditzzy.nuvyro.ui.profile.ProfileRoute
 import com.ditzzy.nuvyro.ui.profile.ProfileViewModel
 import com.ditzzy.nuvyro.ui.profile.ProfileViewModelFactory
+import com.ditzzy.nuvyro.ui.receive.ReceiveRoute
 import com.ditzzy.nuvyro.ui.send.SendRoute
 import com.ditzzy.nuvyro.ui.send.SendViewModel
 import com.ditzzy.nuvyro.ui.send.SendViewModelFactory
@@ -42,6 +45,9 @@ fun NuvyroApp() {
     val sendFactory = remember(context.applicationContext) { SendViewModelFactory(context) }
     val sendViewModel: SendViewModel = viewModel(factory = sendFactory)
     val sendState by sendViewModel.state.collectAsStateWithLifecycle()
+    val lanFactory = remember(context.applicationContext) { LanViewModelFactory(context) }
+    val lanViewModel: LanViewModel = viewModel(factory = lanFactory)
+    val lanState by lanViewModel.state.collectAsStateWithLifecycle()
 
     when {
         state.loading -> Scaffold { innerPadding ->
@@ -62,12 +68,16 @@ fun NuvyroApp() {
         }
         state.completed -> when {
             profileState.editing -> ProfileRoute(profileState, profileViewModel)
-            sendState.active -> SendRoute(sendState, sendViewModel)
+            lanState.receiving -> ReceiveRoute(
+                lanState, profileState.profile?.displayName.orEmpty(), profileState.savedPhoto, lanViewModel
+            )
+            sendState.active -> SendRoute(sendState, sendViewModel, lanState, lanViewModel)
             else -> HomeScreen(
                 profileName = profileState.profile?.displayName.orEmpty(),
                 profilePhoto = profileState.savedPhoto,
                 onProfileClick = profileViewModel::beginEditing,
-                onSendClick = sendViewModel::open
+                onSendClick = sendViewModel::open,
+                onReceiveClick = lanViewModel::openReceive
             )
         }
         else -> SetupRoute(state, setupViewModel, profileState, profileViewModel)

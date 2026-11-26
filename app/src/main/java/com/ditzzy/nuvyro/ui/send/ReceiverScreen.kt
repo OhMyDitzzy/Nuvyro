@@ -36,7 +36,8 @@ fun ReceiverScreen(
     state: SendUiState,
     onEditFiles: () -> Unit,
     onBack: () -> Unit,
-    onSelectReceiver: (String) -> Unit = {}
+    onSelectReceiver: (String) -> Unit = {},
+    statusActions: @Composable () -> Unit = {}
 ) {
     var resumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
@@ -70,6 +71,7 @@ fun ReceiverScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 ReceiverStatus(discovery)
+                statusActions()
                 ReceiverRadar(
                     receivers = discovery.receivers,
                     selectedId = discovery.selectedId,

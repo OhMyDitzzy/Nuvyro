@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.ditzzy.nuvyro.core.storage.OutgoingFileAccess
 import com.ditzzy.nuvyro.data.send.FileSelection
 import com.ditzzy.nuvyro.data.send.OutgoingFile
+import com.ditzzy.nuvyro.ui.send.receiver.ReceiverDiscoveryUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -66,6 +67,16 @@ class SendViewModel(
         mutableState.update { current ->
             if (current.receiverDiscovery.receivers.none { it.id == id }) current
             else current.copy(receiverDiscovery = current.receiverDiscovery.copy(selectedId = id))
+        }
+    }
+
+    fun updateReceivers(discovery: ReceiverDiscoveryUiState) {
+        mutableState.update { current ->
+            current.copy(receiverDiscovery = discovery.copy(
+                selectedId = current.receiverDiscovery.selectedId?.takeIf { id ->
+                    discovery.receivers.any { it.id == id }
+                }
+            ))
         }
     }
 

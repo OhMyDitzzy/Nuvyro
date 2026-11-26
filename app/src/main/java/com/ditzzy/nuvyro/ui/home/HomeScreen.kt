@@ -25,13 +25,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -42,7 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ditzzy.nuvyro.R
 import com.ditzzy.nuvyro.ui.profile.components.ProfileAvatar
-import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -50,28 +45,16 @@ fun HomeScreen(
     profileName: String = "",
     profilePhoto: Bitmap? = null,
     onProfileClick: () -> Unit = {},
-    onSendClick: () -> Unit = {}
+    onSendClick: () -> Unit = {},
+    onReceiveClick: () -> Unit = {}
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val receiveMessage = stringResource(R.string.home_receive_unavailable)
-    val showMessage: (String) -> Unit = { message ->
-        scope.launch {
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message)
-        }
-    }
-
-    Scaffold(
-        modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
+    Scaffold(modifier = modifier) { innerPadding ->
         HomeContent(
             profileName = profileName,
             profilePhoto = profilePhoto,
             onProfileClick = onProfileClick,
             onSendClick = onSendClick,
-            onReceiveClick = { showMessage(receiveMessage) },
+            onReceiveClick = onReceiveClick,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
