@@ -2,6 +2,7 @@ package com.ditzzy.nuvyro.ui.setup.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -27,10 +28,13 @@ internal fun SetupNavigation(
     notificationsEnabled: Boolean,
     batteryOptimizationDisabled: Boolean,
     onNext: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSkipProfile: () -> Unit,
+    profileReady: Boolean
 ) {
     val nextLabel = when (state.step) {
         SetupStep.Welcome -> R.string.setup_get_started
+        SetupStep.Profile -> R.string.profile_save_continue
         SetupStep.ReceiveFolder -> R.string.setup_finish
         SetupStep.Notifications -> if (notificationsEnabled) R.string.setup_continue
             else R.string.setup_skip
@@ -48,20 +52,38 @@ internal fun SetupNavigation(
             ) {
                 Button(
                     onClick = onNext,
-                    enabled = !state.saving && (
+                    enabled = !state.saving && (state.step != SetupStep.Profile || profileReady) && (
                         state.step != SetupStep.ReceiveFolder || state.folder != null
                     ),
                     modifier = Modifier.fillMaxWidth().sizeIn(minHeight = 56.dp)
                 ) {
-                    Text(stringResource(if (state.saving) R.string.setup_saving else nextLabel))
+                    Text(stringResource(when {
+                        state.saving && state.step == SetupStep.Profile -> R.string.profile_working
+                        state.saving -> R.string.setup_saving
+                        else -> nextLabel
+                    }))
                 }
                 if (state.step != SetupStep.Welcome) {
-                    TextButton(
-                        onClick = onBack,
-                        enabled = !state.saving,
-                        modifier = Modifier.fillMaxWidth().sizeIn(minHeight = 48.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(stringResource(R.string.setup_back))
+                        TextButton(
+                            onClick = onBack,
+                            enabled = !state.saving,
+                            modifier = Modifier.weight(1f).sizeIn(minHeight = 48.dp)
+                        ) {
+                            Text(stringResource(R.string.setup_back))
+                        }
+                        if (state.step == SetupStep.Profile) {
+                            TextButton(
+                                onClick = onSkipProfile,
+                                enabled = !state.saving,
+                                modifier = Modifier.weight(1f).sizeIn(minHeight = 48.dp)
+                            ) {
+                                Text(stringResource(R.string.setup_skip))
+                            }
+                        }
                     }
                 }
             }

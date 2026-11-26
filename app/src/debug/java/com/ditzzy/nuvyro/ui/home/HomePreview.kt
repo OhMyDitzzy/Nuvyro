@@ -12,6 +12,6 @@ import com.ditzzy.nuvyro.ui.theme.NuvyroTheme
 @Composable
 private fun HomePreview() {
     NuvyroTheme {
-        HomeScreen()
+        HomeScreen(profileName = "Alex")
     }
 }

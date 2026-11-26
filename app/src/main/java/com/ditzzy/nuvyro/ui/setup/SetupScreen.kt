@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -43,14 +44,21 @@ fun SetupScreen(
     onBackgroundClick: () -> Unit,
     onFolderClick: () -> Unit,
     onNext: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSkipProfile: () -> Unit,
+    profileReady: Boolean,
+    profileContent: @Composable () -> Unit
 ) {
     BackHandler(enabled = state.step != SetupStep.Welcome) {
         if (!state.saving) onBack()
     }
     Scaffold(
+        modifier = Modifier.imePadding(),
         bottomBar = {
-            SetupNavigation(state, notificationsEnabled, batteryOptimizationDisabled, onNext, onBack)
+            SetupNavigation(
+                state, notificationsEnabled, batteryOptimizationDisabled,
+                onNext, onBack, onSkipProfile, profileReady
+            )
         }
     ) { innerPadding ->
         Column(
@@ -114,7 +122,7 @@ fun SetupScreen(
                 }
                 SetupStepContent(
                     state, notificationsEnabled, notificationDeclined, batteryOptimizationDisabled,
-                    onNotificationsClick, onBackgroundClick, onFolderClick
+                    onNotificationsClick, onBackgroundClick, onFolderClick, profileContent
                 )
                 state.error?.let { error ->
                     Text(

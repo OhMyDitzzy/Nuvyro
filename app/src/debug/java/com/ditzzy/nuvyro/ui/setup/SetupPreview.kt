@@ -7,12 +7,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import com.ditzzy.nuvyro.core.storage.ReceiveFolder
+import com.ditzzy.nuvyro.data.profile.LocalProfile
 import com.ditzzy.nuvyro.data.setup.SetupStep
+import com.ditzzy.nuvyro.ui.profile.ProfileUiState
+import com.ditzzy.nuvyro.ui.profile.components.ProfileForm
 import com.ditzzy.nuvyro.ui.theme.NuvyroTheme
 
 class SetupPreviewProvider : PreviewParameterProvider<SetupUiState> {
     override val values: Sequence<SetupUiState> = sequenceOf(
         SetupUiState(loading = false, step = SetupStep.Welcome),
+        SetupUiState(loading = false, step = SetupStep.Profile),
         SetupUiState(loading = false, step = SetupStep.Notifications),
         SetupUiState(loading = false, step = SetupStep.Background),
         SetupUiState(loading = false, step = SetupStep.ReceiveFolder),
@@ -45,7 +49,17 @@ private fun SetupPreview(@PreviewParameter(SetupPreviewProvider::class) state: S
             onBackgroundClick = {},
             onFolderClick = {},
             onNext = {},
-            onBack = {}
+            onBack = {},
+            onSkipProfile = {},
+            profileReady = true,
+            profileContent = {
+                ProfileForm(
+                    state = ProfileUiState(
+                        loading = false, profile = LocalProfile("Alex"), name = "Alex"
+                    ),
+                    onNameChange = {}, onChoosePhoto = {}, onRemovePhoto = {}, onRetry = {}
+                )
+            }
         )
     }
 }

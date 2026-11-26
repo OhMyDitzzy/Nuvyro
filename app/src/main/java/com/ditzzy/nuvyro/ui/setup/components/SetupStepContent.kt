@@ -25,7 +25,8 @@ internal fun SetupStepContent(
     batteryOptimizationDisabled: Boolean,
     onNotificationsClick: () -> Unit,
     onBackgroundClick: () -> Unit,
-    onFolderClick: () -> Unit
+    onFolderClick: () -> Unit,
+    profileContent: @Composable () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         when (state.step) {
@@ -33,6 +34,7 @@ internal fun SetupStepContent(
                 text = stringResource(R.string.setup_welcome_details),
                 style = MaterialTheme.typography.bodyLarge
             )
+            SetupStep.Profile -> profileContent()
             SetupStep.Notifications -> {
                 StatusCard(stringResource(
                     if (notificationsEnabled) R.string.setup_notifications_enabled

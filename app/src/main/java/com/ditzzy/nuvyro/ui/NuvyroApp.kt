@@ -20,6 +20,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ditzzy.nuvyro.R
 import com.ditzzy.nuvyro.ui.home.HomeScreen
+import com.ditzzy.nuvyro.ui.profile.ProfileRoute
+import com.ditzzy.nuvyro.ui.profile.ProfileViewModel
+import com.ditzzy.nuvyro.ui.profile.ProfileViewModelFactory
 import com.ditzzy.nuvyro.ui.setup.SetupRoute
 import com.ditzzy.nuvyro.ui.setup.SetupViewModel
 import com.ditzzy.nuvyro.ui.setup.SetupViewModelFactory
@@ -30,6 +33,9 @@ fun NuvyroApp() {
     val factory = remember(context.applicationContext) { SetupViewModelFactory(context) }
     val setupViewModel: SetupViewModel = viewModel(factory = factory)
     val state by setupViewModel.state.collectAsStateWithLifecycle()
+    val profileFactory = remember(context.applicationContext) { ProfileViewModelFactory(context) }
+    val profileViewModel: ProfileViewModel = viewModel(factory = profileFactory)
+    val profileState by profileViewModel.state.collectAsStateWithLifecycle()
 
     when {
         state.loading -> Scaffold { innerPadding ->
@@ -48,7 +54,15 @@ fun NuvyroApp() {
                 }
             }
         }
-        state.completed -> HomeScreen()
-        else -> SetupRoute(state, setupViewModel)
+        state.completed -> if (profileState.editing) {
+            ProfileRoute(profileState, profileViewModel)
+        } else {
+            HomeScreen(
+                profileName = profileState.profile?.displayName.orEmpty(),
+                profilePhoto = profileState.savedPhoto,
+                onProfileClick = profileViewModel::beginEditing
+            )
+        }
+        else -> SetupRoute(state, setupViewModel, profileState, profileViewModel)
     }
 }

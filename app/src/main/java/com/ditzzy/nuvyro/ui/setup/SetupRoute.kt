@@ -17,9 +17,18 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.ditzzy.nuvyro.core.background.BackgroundActivitySettings
 import com.ditzzy.nuvyro.core.permissions.NotificationPermission
 import com.ditzzy.nuvyro.core.storage.ReceiveFolderContract
+import com.ditzzy.nuvyro.data.setup.SetupStep
+import com.ditzzy.nuvyro.ui.profile.ProfileFormRoute
+import com.ditzzy.nuvyro.ui.profile.ProfileUiState
+import com.ditzzy.nuvyro.ui.profile.ProfileViewModel
 
 @Composable
-fun SetupRoute(state: SetupUiState, viewModel: SetupViewModel) {
+fun SetupRoute(
+    state: SetupUiState,
+    viewModel: SetupViewModel,
+    profileState: ProfileUiState,
+    profileViewModel: ProfileViewModel
+) {
     val context = LocalContext.current
     var notificationsEnabled by remember { mutableStateOf(NotificationPermission.isEnabled(context)) }
     var batteryOptimizationDisabled by remember {
@@ -59,7 +68,7 @@ fun SetupRoute(state: SetupUiState, viewModel: SetupViewModel) {
         onPauseOrDispose { }
     }
     SetupScreen(
-        state = state,
+        state = state.copy(saving = state.saving || profileState.busy),
         notificationsEnabled = notificationsEnabled,
         notificationDeclined = notificationDeclined,
         batteryOptimizationDisabled = batteryOptimizationDisabled,
@@ -82,7 +91,32 @@ fun SetupRoute(state: SetupUiState, viewModel: SetupViewModel) {
                 viewModel.showFolderError()
             }
         },
-        onNext = viewModel::next,
-        onBack = viewModel::back
+        onNext = {
+            if (!profileViewModel.state.value.busy && !viewModel.state.value.saving) {
+                if (viewModel.state.value.step == SetupStep.Profile) {
+                    profileViewModel.save(onSaved = viewModel::next)
+                } else {
+                    viewModel.next()
+                }
+            }
+        },
+        onBack = {
+            if (!profileViewModel.state.value.busy && !viewModel.state.value.saving) {
+                if (viewModel.state.value.step == SetupStep.Profile) profileViewModel.discardChanges()
+                viewModel.back()
+            }
+        },
+        onSkipProfile = {
+            if (!profileViewModel.state.value.busy && !viewModel.state.value.saving &&
+                viewModel.state.value.step == SetupStep.Profile
+            ) {
+                profileViewModel.discardChanges()
+                viewModel.next()
+            }
+        },
+        profileReady = !profileState.loading && profileState.profile != null,
+        profileContent = {
+            ProfileFormRoute(profileState, profileViewModel, enabled = !state.saving)
+        }
     )
 }

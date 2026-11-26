@@ -1,5 +1,6 @@
 package com.ditzzy.nuvyro.ui.home
 
+import android.graphics.Bitmap
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -34,13 +36,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ditzzy.nuvyro.R
+import com.ditzzy.nuvyro.ui.profile.components.ProfileAvatar
 import kotlinx.coroutines.launch
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    profileName: String = "",
+    profilePhoto: Bitmap? = null,
+    onProfileClick: () -> Unit = {}
+) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val sendMessage = stringResource(R.string.home_send_unavailable)
@@ -57,6 +67,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         HomeContent(
+            profileName = profileName,
+            profilePhoto = profilePhoto,
+            onProfileClick = onProfileClick,
             onSendClick = { showMessage(sendMessage) },
             onReceiveClick = { showMessage(receiveMessage) },
             modifier = Modifier
@@ -68,6 +81,9 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
 @Composable
 private fun HomeContent(
+    profileName: String,
+    profilePhoto: Bitmap?,
+    onProfileClick: () -> Unit,
     onSendClick: () -> Unit,
     onReceiveClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -99,9 +115,17 @@ private fun HomeContent(
                 }
                 Text(
                     text = stringResource(R.string.app_name),
+                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold
                 )
+                val profileLabel = stringResource(R.string.profile_open)
+                IconButton(
+                    onClick = onProfileClick,
+                    modifier = Modifier.size(48.dp).semantics { contentDescription = profileLabel }
+                ) {
+                    ProfileAvatar(profileName, profilePhoto, Modifier.size(40.dp))
+                }
             }
 
             Spacer(modifier = Modifier.size(40.dp))
