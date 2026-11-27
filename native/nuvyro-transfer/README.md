@@ -121,6 +121,31 @@ their own lifetimes. Closing/dropping the identity revokes its invitation store.
 The owning worker must poll `check_live` and abort/drop all existing connections
 on session expiry, generation changes, cancellation, or TLS errors.
 
+`ReceiverAdmission` belongs to one Receive session and must survive invitation
+replacement and failed connections. It admits at most two unpaired sockets and
+eight new TLS attempts per rolling 60 seconds. A failed or cancelled handshake
+releases its concurrency slot but does not refund its attempt. Capacity and
+pre-cancelled rejections do not start TLS or consume an attempt. Closing or
+dropping the admission owner invalidates its remaining permits; clock reversal
+closes it permanently. Use a distinct cancellation token for each connection.
+
+The receiver context binds native and listener-route generations to the secure
+session ID. It requires no client Network handle on a hotspot host and does not
+prove network provenance. The listener must first validate the accepted route
+and peer policy and make the socket nonblocking. `perform_receiver_handshake`
+then drives only TLS records on that pre-admitted socket, starts no listener or
+thread, and enforces the original ten-second admission deadline even if the
+socket waited before the driver started. Cancellation, context, admission, and
+identity lifetime checks surround I/O and readiness polls of at most 50 ms.
+
+The server must receive the client's Finished, flush pending records, and verify
+TLS 1.3 and the fixed ALPN before returning `VerifiedIncoming`. That opaque owner
+retains the socket, TLS state, and unpaired permit for Hello and invitation
+authentication; TLS completion alone does not release a slot or authenticate
+the sender. It exposes no application I/O or file capability. A later control
+owner must continue lifecycle checks and enforce its own protocol deadlines;
+the returned object does not monitor the socket on its own.
+
 An invitation replaces the previous unused invitation, expires after 120
 monotonic seconds, and is consumed under the same lock as constant-time ID/token
 comparison. Five invalid attempts in a rolling minute invalidate it. Valid

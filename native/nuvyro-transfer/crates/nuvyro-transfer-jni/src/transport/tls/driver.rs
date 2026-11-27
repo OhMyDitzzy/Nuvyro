@@ -15,7 +15,7 @@ pub(in crate::transport) enum TlsInterest {
     Write,
 }
 
-/// Performs only bounded socket I/O. The descriptor remains owned by PendingConnection.
+/// Performs only bounded socket I/O. The descriptor remains owned by its pending connection.
 pub(in crate::transport) trait TlsIo<S> {
     fn now(&self) -> Instant;
     fn read(&self, socket: &S, bytes: &mut [u8]) -> io::Result<usize>;

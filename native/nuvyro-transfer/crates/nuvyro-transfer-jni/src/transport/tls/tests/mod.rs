@@ -3,3 +3,4 @@ mod driver;
 mod fixtures;
 mod handshake;
 mod pairing;
+mod server;

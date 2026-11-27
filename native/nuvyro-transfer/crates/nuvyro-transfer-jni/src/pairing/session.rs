@@ -140,7 +140,11 @@ impl ReceiverIdentity {
     }
 
     pub(crate) fn check_live(&self) -> Result<(), ErrorCode> {
-        self.validate_at(SystemTime::now(), Instant::now())
+        self.check_live_at(SystemTime::now(), Instant::now())
+    }
+
+    pub(crate) fn check_live_at(&self, wall: SystemTime, now: Instant) -> Result<(), ErrorCode> {
+        self.validate_at(wall, now)
     }
 
     pub(crate) fn new_server(&self) -> Result<ServerConnection, ErrorCode> {

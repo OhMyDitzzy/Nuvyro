@@ -11,9 +11,12 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
 use super::budget::ConnectionBudget;
 use super::connector::{ConnectProgress, PollProgress, SocketOps, connect_with, poll_timeout};
+use super::tls::{IncomingTlsError, ReceiverTlsIo, VerifiedIncoming, handshake_incoming_with};
 use super::tls::{PairConnectionError, PairedConnection, pair_outgoing_with};
 use super::tls::{TlsHandshakeError, TlsInterest, TlsIo, VerifiedTlsConnection, handshake_with};
 use super::{ConnectAttempt, ConnectError, ConnectionContext, PendingTlsSocket};
+use super::{PendingIncoming, ReceiverContext};
+use crate::pairing::ReceiverIdentity;
 
 #[link(name = "android")]
 unsafe extern "C" {
@@ -49,7 +52,17 @@ pub(crate) fn perform_pairing(
     pair_outgoing_with(pending, &AndroidTlsIo, qr, claimed_name, current_context)
 }
 
+pub(crate) fn perform_receiver_handshake(
+    pending: PendingIncoming<Socket>,
+    identity: &ReceiverIdentity,
+    current_context: impl FnMut() -> Option<ReceiverContext>,
+) -> Result<VerifiedIncoming<Socket>, IncomingTlsError> {
+    handshake_incoming_with(pending, &AndroidTlsIo, identity, current_context)
+}
+
 struct AndroidTlsIo;
+
+impl ReceiverTlsIo<Socket> for AndroidTlsIo {}
 
 impl TlsIo<Socket> for AndroidTlsIo {
     fn now(&self) -> Instant {

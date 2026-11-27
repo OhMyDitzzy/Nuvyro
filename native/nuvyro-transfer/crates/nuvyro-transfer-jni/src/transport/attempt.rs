@@ -63,6 +63,10 @@ impl fmt::Debug for ConnectionContext {
 pub(crate) struct ConnectCancellation(Arc<AtomicBool>);
 
 impl ConnectCancellation {
+    pub(in crate::transport) fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
     pub(crate) fn cancel(&self) {
         self.0.store(true, Ordering::Release);
     }
@@ -103,7 +107,7 @@ impl ConnectAttempt {
         Ok(Self {
             context,
             endpoint,
-            cancellation: ConnectCancellation(Arc::new(AtomicBool::new(false))),
+            cancellation: ConnectCancellation::new(),
             started: now,
             deadline: now
                 .checked_add(timeout)

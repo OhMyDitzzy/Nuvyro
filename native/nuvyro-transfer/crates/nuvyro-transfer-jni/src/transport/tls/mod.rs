@@ -5,6 +5,7 @@ mod client;
 mod driver;
 mod error;
 mod pairing;
+mod server;
 mod verifier;
 
 #[cfg(test)]
@@ -19,6 +20,8 @@ pub(super) use driver::{
 pub(super) use error::TlsPolicyError;
 pub(super) use pairing::pair_outgoing_with;
 pub(crate) use pairing::{PairConnectionError, PairedConnection};
+pub(crate) use server::{IncomingTlsError, VerifiedIncoming};
+pub(in crate::transport) use server::{ReceiverTlsIo, handshake_incoming_with};
 
 const SERVER_NAME: &str = "nuvyro.local";
 const MAX_CERTIFICATE_BYTES: usize = 4096;

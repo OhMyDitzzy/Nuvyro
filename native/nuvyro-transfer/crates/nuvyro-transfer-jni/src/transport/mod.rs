@@ -6,6 +6,7 @@ mod attempt;
 mod budget;
 mod connector;
 mod endpoint;
+mod receiver;
 mod tls;
 
 #[cfg(test)]
@@ -13,13 +14,16 @@ mod tests;
 
 pub(crate) use attempt::{ConnectAttempt, ConnectCancellation, ConnectionContext};
 pub(crate) use endpoint::NumericEndpoint;
+pub(crate) use receiver::{PendingIncoming, ReceiverAdmission, ReceiverContext, ReceiverError};
 #[cfg(test)]
 pub(crate) use tls::{
     check_negotiated_profile as test_check_tls_profile, new_client as test_tls_client,
 };
 
 #[cfg(target_os = "android")]
-pub(crate) use android::{connect, perform_pairing, perform_tls_handshake};
+pub(crate) use android::{
+    connect, perform_pairing, perform_receiver_handshake, perform_tls_handshake,
+};
 pub(crate) use tls::{PairConnectionError, PairedConnection};
 #[cfg(target_os = "android")]
 pub(crate) type PendingTlsSocket = connector::PendingConnection<socket2::Socket>;
