@@ -58,7 +58,11 @@ class LocalHotspot(private val wifi: WifiManager?) {
             override fun onStopped() { close(IOException("Hotspot stopped")) }
             override fun onFailed(reason: Int) { close(IOException("Hotspot could not start: $reason")) }
         }
-        wifi.startLocalOnlyHotspot(callback, Handler(Looper.getMainLooper()))
+        try {
+            wifi.startLocalOnlyHotspot(callback, Handler(Looper.getMainLooper()))
+        } catch (error: SecurityException) {
+            close(error)
+        }
         awaitClose {
             startup.cancel()
             synchronized(lock) {

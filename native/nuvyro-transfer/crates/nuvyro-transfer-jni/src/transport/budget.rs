@@ -14,7 +14,7 @@ impl ConnectionBudget {
 
     pub(super) fn acquire(&self) -> Result<ConnectionPermit, ConnectError> {
         self.0
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |active| {
                 (active < MAX_CONNECTIONS).then_some(active + 1)
             })
             .map_err(|_| ConnectError::ResourceLimit)?;
