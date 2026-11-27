@@ -1,0 +1,33 @@
+//! Wire ceilings; storage/device capability checks may impose smaller limits.
+
+pub const HEADER_BYTES: usize = 6;
+pub const ID_BYTES: usize = 16;
+pub const DIGEST_BYTES: usize = 32;
+pub const TOKEN_BYTES: usize = 32;
+pub const MAX_CONTROL_FRAME_LEN: u32 = 64 * 1024;
+pub const MAX_MANIFEST_BYTES: u32 = 60 * 1024;
+pub const MAX_FILES: u16 = 128;
+pub const MAX_NAME_BYTES: u32 = 255;
+pub const MAX_MIME_BYTES: u32 = 128;
+pub const MAX_CHUNK_BYTES: u32 = 256 * 1024;
+pub const DATA_CHUNK_FIXED_BODY_LEN: u32 = 56;
+pub const MAX_FRAME_LEN: u32 = 2 + DATA_CHUNK_FIXED_BODY_LEN + MAX_CHUNK_BYTES;
+pub const MAX_FILE_BYTES: u64 = 1 << 40;
+pub const MAX_TOTAL_BYTES: u64 = 1 << 42;
+pub const MAX_QUEUED_CHUNKS: usize = 4;
+pub const PAIRING_QR_PAYLOAD_BYTES: usize = 104;
+pub const MAX_PAIRING_QR_TEXT_BYTES: usize = 512;
+pub const INVITATION_TTL_SECS: u64 = 120;
+pub const HANDSHAKE_TIMEOUT_SECS: u64 = 10;
+pub const HELLO_TIMEOUT_SECS: u64 = 10;
+pub const AUTH_TIMEOUT_SECS: u64 = 10;
+pub const APPROVAL_TIMEOUT_SECS: u64 = 60;
+pub const STORAGE_PREPARE_TIMEOUT_SECS: u64 = 60;
+pub const IO_IDLE_TIMEOUT_SECS: u64 = 30;
+pub const STATUS_INTERVAL_SECS: u64 = 5;
+pub const PAIRED_IDLE_TIMEOUT_SECS: u64 = 300;
+pub const MAX_PHASE_SECS: u64 = 86_400;
+pub const STAGING_RESERVE_BYTES: u64 = 16 * 1024 * 1024;
+pub const MAX_UNPAIRED_CONNECTIONS: usize = 2;
+pub const MAX_TLS_ATTEMPTS_PER_MINUTE: usize = 8;
+pub const MAX_INVITATION_FAILURES_PER_MINUTE: usize = 5;

@@ -5,13 +5,20 @@ share the same Git history; there is no Git submodule or separate Rust remote.
 
 ## Status
 
-This is the initial workspace scaffold. It contains a portable core library and
-a JNI bridge crate configured to produce `libnuvyro_transfer_jni.so` in a future
-native build. The only shared Rust API currently exposes the package version.
-That version does not define the wire protocol or JNI ABI.
+The workspace contains the portable core and a JNI bridge crate configured to
+produce `libnuvyro_transfer_jni.so` in a future native build. P02 adds wire 1.0
+limits/message codes, allocation-free six-byte header validation, ABI 1 constants,
+and public contract fixtures. The package version remains independent of both
+the wire version and JNI ABI.
 
-JNI entry points, Android loading/packaging, TLS, pairing, and file transfer are
-not implemented. The Android app does not load or build these crates yet.
+Full body/stream/state parsing, JNI entry points, Android loading/packaging, TLS,
+pairing, and file transfer are not implemented. The Android app does not load or
+build these crates yet. Rust compilation and the Rust fixture test remain unverified.
+
+The implementation contracts are [wire 1.0](../../docs/transfer-protocol-v1.md),
+[security](../../docs/transfer-security-v1.md), and
+[JNI ABI 1](../../docs/transfer-jni-v1.md). These define behavior to implement,
+not an audited or operational transfer protocol.
 
 ## Layout
 
@@ -54,7 +61,12 @@ Run these from `native/nuvyro-transfer`:
 ```sh
 cargo metadata --format-version 1 --no-deps --frozen
 cargo fmt --all -- --check
+python3 tools/check_contract_vectors.py
 ```
+
+The Python command checks artifact encodings against an independent test oracle;
+it does not execute Rust or test TLS/JNI/storage. The Rust integration fixture test
+is written but has not been compiled or run. See the fixture README for scope.
 
 The workspace currently has no external dependencies. The bridge depends only
 on the local core crate. Commit `Cargo.lock`; keep `target/` and generated `.so`
@@ -66,6 +78,8 @@ distribution rather than inferring a grant from the scaffold.
 
 ## Next steps
 
-Define the protocol, state, trust boundaries, resource limits, and completion
-contract first. Then implement JNI lifecycle and explicit Android build/packaging.
-Add network and crypto dependencies only when those implementations need them.
+P02 fixes the initial protocol, trust boundaries, resource limits, and completion
+contract. P03 implements JNI lifecycle and explicit Android build/packaging;
+P04 completes stream/body/state parsing and Network-bound transport. Add network
+and crypto dependencies only when those implementations need them. Native tests,
+TLS/pinning tests, and two-device verification are still required.

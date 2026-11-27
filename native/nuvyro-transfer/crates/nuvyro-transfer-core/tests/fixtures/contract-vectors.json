@@ -1,0 +1,220 @@
+{
+  "schema": 1,
+  "warning": "Public deterministic fixtures only. Never use these IDs, pins, or tokens in an actual session. No cryptographic handshake is represented.",
+  "wire_version": [
+    1,
+    0
+  ],
+  "qr_cases": [
+    {
+      "name": "valid_pairing_qr",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AHg",
+      "expect": "ok"
+    },
+    {
+      "name": "old_wifi_qr",
+      "payload": "WIFI:T:WPA;S:Example;P:ExampleOnly;;",
+      "expect": "prefix"
+    },
+    {
+      "name": "major_mismatch",
+      "payload": "NUVYRO:PAIR:1:AAIAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AHg",
+      "expect": "version"
+    },
+    {
+      "name": "minor_mismatch",
+      "payload": "NUVYRO:PAIR:1:AAEAAREREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AHg",
+      "expect": "version"
+    },
+    {
+      "name": "profile_port",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp6AHg",
+      "expect": "port"
+    },
+    {
+      "name": "wrong_ttl",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AHk",
+      "expect": "ttl"
+    },
+    {
+      "name": "zero_session",
+      "payload": "NUVYRO:PAIR:1:AAEAAAAAAAAAAAAAAAAAAAAAAAAiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AHg",
+      "expect": "zero"
+    },
+    {
+      "name": "zero_invitation",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREAAAAAAAAAAAAAAAAAAAAAMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AHg",
+      "expect": "zero"
+    },
+    {
+      "name": "zero_pin",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABERERERERERERERERERERERERERERERERERERERERERLp7AHg",
+      "expect": "zero"
+    },
+    {
+      "name": "zero_token",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALp7AHg",
+      "expect": "zero"
+    },
+    {
+      "name": "padded_base64",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AHg=",
+      "expect": "encoding"
+    },
+    {
+      "name": "wrong_decoded_length",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7AA",
+      "expect": "length"
+    },
+    {
+      "name": "oversized_before_decode",
+      "payload": "NUVYRO:PAIR:1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "expect": "limit"
+    },
+    {
+      "name": "invalid_base64_quantum",
+      "payload": "NUVYRO:PAIR:1:AAEAABEREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzNERERERERERERERERERERERERERERERERERERERERERLp7A",
+      "expect": "encoding"
+    }
+  ],
+  "manifest_cases": [
+    {
+      "name": "empty_file",
+      "hex": "0001000100000000000000005555555555555555555555555555555500000000000000000009656d7074792e74787400186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "ok",
+      "expected_sizes": [
+        "0"
+      ]
+    },
+    {
+      "name": "above_u32_size",
+      "hex": "00010001000000010000000188888888888888888888888888888888000000010000000100076269672e62696e00186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "ok",
+      "expected_sizes": [
+        "4294967297"
+      ]
+    },
+    {
+      "name": "no_files",
+      "hex": "000100000000000000000000",
+      "expect": "MalformedFrame"
+    },
+    {
+      "name": "traversal",
+      "hex": "00010001000000000000000055555555555555555555555555555555000000000000000000092e2e2f65736361706500186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "UnsafeName"
+    },
+    {
+      "name": "bidi_override",
+      "hex": "0001000100000000000000005555555555555555555555555555555500000000000000000011696e766f696365e280ae7478742e65786500186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "UnsafeName"
+    },
+    {
+      "name": "name_256_bytes",
+      "hex": "00010001000000000000000055555555555555555555555555555555000000000000000001007878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787800186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "LimitExceeded"
+    },
+    {
+      "name": "invalid_utf8",
+      "hex": "0001000100000000000000005555555555555555555555555555555500000000000000000001ff00186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "MalformedFrame"
+    },
+    {
+      "name": "duplicate_file_id",
+      "hex": "0001000200000000000000005555555555555555555555555555555500000000000000000009656d7074792e74787400186170706c69636174696f6e2f6f637465742d73747265616d5555555555555555555555555555555500000000000000000009656d7074792e74787400186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "DuplicateId"
+    },
+    {
+      "name": "wrong_total",
+      "hex": "0001000100000000000000015555555555555555555555555555555500000000000000000009656d7074792e74787400186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "MalformedFrame"
+    },
+    {
+      "name": "unknown_size_not_a_sentinel",
+      "hex": "00010001ffffffffffffffff55555555555555555555555555555555ffffffffffffffff000b756e6b6e6f776e2e62696e00186170706c69636174696f6e2f6f637465742d73747265616d",
+      "expect": "LimitExceeded"
+    },
+    {
+      "name": "trailing_bytes",
+      "hex": "0001000100000000000000005555555555555555555555555555555500000000000000000009656d7074792e74787400186170706c69636174696f6e2f6f637465742d73747265616d00",
+      "expect": "MalformedFrame"
+    }
+  ],
+  "frame_examples": [
+    {
+      "name": "session_hello",
+      "hex": "0000001a0001000100001111111111111111111111111111111100000000",
+      "kind": 1
+    },
+    {
+      "name": "pair_authentication",
+      "hex": "000000350003222222222222222222222222222222224444444444444444444444444444444444444444444444444444444444444444000141",
+      "kind": 3
+    },
+    {
+      "name": "empty_file_begin",
+      "hex": "0000003a02006666666666666666666666666666666677777777777777777777777777777777555555555555555555555555555555550000000000000000",
+      "kind": 512
+    },
+    {
+      "name": "empty_file_end",
+      "hex": "0000005a02036666666666666666666666666666666677777777777777777777777777777777555555555555555555555555555555550000000000000000af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "kind": 515
+    }
+  ],
+  "hash_cases": [
+    {
+      "name": "official_blake3_empty_stream",
+      "input_hex": "",
+      "digest_hex": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "source": "BLAKE3-team/BLAKE3 test_vectors/test_vectors.json, input_len=0, first 32 bytes"
+    }
+  ],
+  "deferred_scenarios": [
+    {
+      "name": "data_before_consent",
+      "stage": "P04/P06",
+      "expect": "UnexpectedState; no destination write"
+    },
+    {
+      "name": "approval_for_different_manifest",
+      "stage": "P06",
+      "expect": "UnexpectedState; no source/destination transfer I/O"
+    },
+    {
+      "name": "token_race",
+      "stage": "P05",
+      "expect": "Exactly one successful consumption; other attempt AuthenticationFailed"
+    },
+    {
+      "name": "expired_or_consumed_invitation",
+      "stage": "P05",
+      "expect": "AuthenticationFailed; no file write"
+    },
+    {
+      "name": "wrong_pin_or_signature",
+      "stage": "P05",
+      "expect": "TLS failure; no pairing"
+    },
+    {
+      "name": "destination_readback_fails",
+      "stage": "P07",
+      "expect": "No FileCommitted; cleanup uncommitted output"
+    },
+    {
+      "name": "disconnect_after_save_before_receipt",
+      "stage": "P07/P10",
+      "expect": "DeliveryUnconfirmed; no automatic resend"
+    },
+    {
+      "name": "cancel_after_file_commit",
+      "stage": "P08",
+      "expect": "Preserve committed document and per-file receipt"
+    },
+    {
+      "name": "stale_commit_confirmation",
+      "stage": "P03/P07",
+      "expect": "InvalidState; no revived session or duplicate commit"
+    }
+  ]
+}

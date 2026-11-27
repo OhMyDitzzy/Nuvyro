@@ -154,9 +154,11 @@ timeouts above limit profile handling; they do not authenticate devices.
 
 File transfer must add pairing/authentication, receiver consent, encrypted
 transport, integrity verification, and explicit completion semantics before
-files are accepted. A future transfer engine, including a possible Rust engine,
-can use the discovered endpoint after that protocol is defined. The profile
-endpoint must not silently become an unauthenticated file-transfer endpoint.
+files are accepted. The Rust workspace and P02 contracts now define the next
+stage: a separate `_nuvyro-xfer._tcp.` service on TLS port 47739, described in
+`transfer-protocol-v1.md` and `transfer-security-v1.md`. These transfer listeners
+and pairing are not implemented yet. The existing profile endpoint remains
+unchanged and must not become an unauthenticated file-transfer endpoint.
 
 Android references:
 [NSD](https://developer.android.com/develop/connectivity/wifi/use-nsd),
