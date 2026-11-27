@@ -1,11 +1,12 @@
 //! Portable foundation for Nuvyro's session and transfer engine.
 //!
-//! Protocol contracts are defined here; networking, pairing, and file transfer
-//! are not implemented yet.
+//! Bounded wire decoding and stream integrity primitives. Transport,
+//! authentication, consent, and storage are separate responsibilities.
 
 #![forbid(unsafe_code)]
 
+pub mod integrity;
 pub mod protocol;
 
-/// The engine package version, independent of future wire and JNI ABI versions.
+/// The engine package version, independent of wire and JNI ABI versions.
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");

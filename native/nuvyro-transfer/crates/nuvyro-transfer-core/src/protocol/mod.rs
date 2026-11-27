@@ -1,11 +1,21 @@
 //! Protocol 1.0 definitions. See docs/transfer-protocol-v1.md in the repository.
 
+mod cursor;
 mod error;
 mod frame;
 pub mod limits;
+mod manifest;
+mod message;
+mod stream;
 
-pub use error::{ErrorCode, HeaderError};
+pub use error::{BodyError, ErrorCode, HeaderError};
 pub use frame::{FrameHeader, MessageKind};
+pub use manifest::{Manifest, ManifestEntry};
+pub use message::{
+    CancelReason, DeclineReason, ErrorScope, FileContext, FileDigest, Hello, Id, Message,
+    StatusPhase, TransferContext, TransferSummary,
+};
+pub use stream::{Decoded, Frame, StreamDecoder, StreamError};
 
 pub const WIRE_MAJOR: u16 = 1;
 pub const WIRE_MINOR: u16 = 0;

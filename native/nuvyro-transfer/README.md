@@ -13,6 +13,27 @@ The profile endpoint is separate from file transfer. The local-session API
 reports `transport_ready:false`; it does not advertise or authorize file access.
 FD attachment requires an approved transfer/storage phase.
 
+## Core decoding and integrity
+
+Feed TLS plaintext to `StreamDecoder::push`, then process its single returned
+frame before feeding the unconsumed input suffix. Partial headers and bodies
+are retained within the wire ceilings; invalid input, EOF, and cancellation
+close the decoder. A clean EOF succeeds only at a frame boundary.
+The transport must cap its downstream data queue at four chunks.
+
+`Frame::decode` returns a borrowed `Message`; keep the frame alive while using
+its strings or chunk bytes. `Manifest::decode` preserves the original encoding
+and order and calculates the domain-prefixed BLAKE3 digest. Message and frame
+debug formatting omits tokens, names, and data.
+
+`FileStreamVerifier` validates one expected file context, byte count, sequential
+offsets, and incremental BLAKE3. Its local `destination_ready` transition follows
+`FileBegin`; a peer frame cannot make that transition. `IntegrityChecked` covers
+received bytes only. It does not assert staging readback, destination export,
+receipt persistence, or completion. The owning coordinator must enforce
+authentication, generation, consent, deadlines, file order, and storage policy,
+and close the connection on decoding or sequence failure.
+
 ## Contracts and build
 
 - [Wire protocol](../../docs/transfer-protocol-v1.md)
