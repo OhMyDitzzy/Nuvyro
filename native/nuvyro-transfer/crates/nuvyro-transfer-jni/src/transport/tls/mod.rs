@@ -1,9 +1,10 @@
-//! Pinned TLS client policy and private handshake driver. No invitation or file access.
+//! Pinned TLS establishment and invitation control. Sockets and file access stay private.
 
 mod certificate;
 mod client;
 mod driver;
 mod error;
+mod pairing;
 mod verifier;
 
 #[cfg(test)]
@@ -16,6 +17,8 @@ pub(super) use driver::{
     TlsHandshakeError, TlsInterest, TlsIo, VerifiedTlsConnection, handshake_with,
 };
 pub(super) use error::TlsPolicyError;
+pub(super) use pairing::pair_outgoing_with;
+pub(crate) use pairing::{PairConnectionError, PairedConnection};
 
 const SERVER_NAME: &str = "nuvyro.local";
 const MAX_CERTIFICATE_BYTES: usize = 4096;

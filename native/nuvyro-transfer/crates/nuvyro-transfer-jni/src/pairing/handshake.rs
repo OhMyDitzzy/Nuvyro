@@ -266,6 +266,10 @@ impl HandshakeGate {
         self.state = State::Failed;
     }
 
+    pub(crate) const fn deadline(&self) -> Instant {
+        self.deadline
+    }
+
     fn fail<T>(&mut self, error: ErrorCode) -> Result<T, ErrorCode> {
         self.abort();
         Err(error)

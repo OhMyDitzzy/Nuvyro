@@ -79,6 +79,35 @@ The driver is not connected to the JNI engine yet. Even a successful TLS profile
 check does not authenticate an invitation, match the secure session hello,
 authorize a file, or replace receiver consent.
 
+## Outgoing pairing operation
+
+On the owning worker, `perform_pairing` consumes the pending Network-bound socket,
+a decoded QR, a claimed name, and a callback returning the current connection
+context. The QR supplies both the TLS pin and the Hello/invitation fields; its
+session must match the endpoint context before any TLS write. The operation
+performs pinned TLS first and only then drives Hello/Ack and authentication on
+that same connection. It opens no additional socket and starts no thread.
+
+The original TCP/TLS deadline remains in force through TLS completion. Hello and
+authentication then each get the gate's absolute ten-second deadline. Only a
+protocol phase transition changes a deadline. Cancellation and equality of the
+native generation, route generation, Network, and secure session are checked
+around I/O and readiness polls of at most 50 ms. Backward clock observations,
+EOF, malformed input, TLS/socket failures, and stale context release ownership.
+Interrupted calls and partial writes retry within the same phase budget.
+
+The operation queues one control frame at a time, limits TLS output buffering
+to 1 KiB, and confirms the frame to the gate only after all its TLS records are
+flushed. The incoming control parser uses a fixed 41-byte buffer, reads the
+six-byte header before its body, and accepts only HelloAck, PairResult, or Error.
+Other message types and oversized lengths fail without allocating their bodies.
+Unsolicited plaintext already buffered before a request, after an Ack, or after
+PairResult is rejected. This check cannot establish future network liveness.
+The returned `PairedConnection` owns the socket and exposes only its PairContext;
+it grants no file I/O or transfer consent. Its owner must keep enforcing session,
+route, cancellation, and subsequent protocol deadlines for any later operation.
+The JNI engine and Android UI do not call this operation yet.
+
 ## Internal receiver identity and pairing control
 
 `ReceiverIdentity` owns a fresh P-256 session key, its self-signed certificate,

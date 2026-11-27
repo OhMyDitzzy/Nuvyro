@@ -19,7 +19,8 @@ pub(crate) use tls::{
 };
 
 #[cfg(target_os = "android")]
-pub(crate) use android::{connect, perform_tls_handshake};
+pub(crate) use android::{connect, perform_pairing, perform_tls_handshake};
+pub(crate) use tls::{PairConnectionError, PairedConnection};
 #[cfg(target_os = "android")]
 pub(crate) type PendingTlsSocket = connector::PendingConnection<socket2::Socket>;
 

@@ -41,6 +41,7 @@ pub(crate) struct PendingConnection<S> {
     context: ConnectionContext,
     cancellation: ConnectCancellation,
     started: Instant,
+    last_observed: Instant,
     deadline: Instant,
     permit: Option<ConnectionPermit>,
 }
@@ -64,7 +65,7 @@ impl<S> PendingConnection<S> {
     ) -> Result<(), ConnectError> {
         let error = if self.cancellation.is_cancelled() || self.socket.is_none() {
             Some(ConnectError::Cancelled)
-        } else if now < self.started {
+        } else if now < self.started || now < self.last_observed {
             Some(ConnectError::ClockInvalid)
         } else if now >= self.deadline {
             Some(ConnectError::DeadlineExceeded)
@@ -77,8 +78,25 @@ impl<S> PendingConnection<S> {
             self.cancel();
             Err(error)
         } else {
+            self.last_observed = now;
             Ok(())
         }
+    }
+
+    /// Only protocol phase transitions may change the deadline, never peer traffic or retries.
+    pub(super) fn enter_control_phase(
+        &mut self,
+        current: Option<ConnectionContext>,
+        now: Instant,
+        deadline: Instant,
+    ) -> Result<(), ConnectError> {
+        self.check_context_at(current, now)?;
+        if deadline <= now || deadline - now > super::attempt::MAX_CONNECT_TIME {
+            self.cancel();
+            return Err(ConnectError::InvalidTimeout);
+        }
+        self.deadline = deadline;
+        Ok(())
     }
 
     pub(super) fn socket_mut(
@@ -155,7 +173,8 @@ pub(super) fn connect_with<O: SocketOps>(
     }
     ops.verify_peer(&socket, address)
         .map_err(|_| ConnectError::ConnectFailed)?;
-    attempt.check(ops.now())?;
+    let observed = ops.now();
+    attempt.check(observed)?;
     let started = attempt.started_at();
     let deadline = attempt.deadline();
     Ok(PendingConnection {
@@ -163,6 +182,7 @@ pub(super) fn connect_with<O: SocketOps>(
         context: attempt.context,
         cancellation: attempt.cancellation,
         started,
+        last_observed: observed,
         deadline,
         permit: Some(permit),
     })

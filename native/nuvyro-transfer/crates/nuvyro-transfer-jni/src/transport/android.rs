@@ -6,10 +6,12 @@ use std::slice;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use nuvyro_transfer_core::pairing::PairingQr;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
 use super::budget::ConnectionBudget;
 use super::connector::{ConnectProgress, PollProgress, SocketOps, connect_with, poll_timeout};
+use super::tls::{PairConnectionError, PairedConnection, pair_outgoing_with};
 use super::tls::{TlsHandshakeError, TlsInterest, TlsIo, VerifiedTlsConnection, handshake_with};
 use super::{ConnectAttempt, ConnectError, ConnectionContext, PendingTlsSocket};
 
@@ -35,6 +37,16 @@ pub(crate) fn perform_tls_handshake(
     current_context: impl FnMut() -> Option<ConnectionContext>,
 ) -> Result<VerifiedTlsConnection<Socket>, TlsHandshakeError> {
     handshake_with(pending, &AndroidTlsIo, pin, current_context)
+}
+
+/// Blocking only on the owning worker, with nonblocking socket calls and bounded polls.
+pub(crate) fn perform_pairing(
+    pending: PendingTlsSocket,
+    qr: PairingQr,
+    claimed_name: String,
+    current_context: impl FnMut() -> Option<ConnectionContext>,
+) -> Result<PairedConnection<Socket>, PairConnectionError> {
+    pair_outgoing_with(pending, &AndroidTlsIo, qr, claimed_name, current_context)
 }
 
 struct AndroidTlsIo;

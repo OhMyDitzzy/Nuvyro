@@ -26,8 +26,8 @@ pub(super) trait TlsIo<S> {
 /// Owns the still-private socket and verified TLS state. It deliberately exposes no I/O API;
 /// session hello and invitation checks must run before a later layer can send application data.
 pub(crate) struct VerifiedTlsConnection<S> {
-    _pending: PendingConnection<S>,
-    _client: ClientConnection,
+    pub(super) pending: PendingConnection<S>,
+    pub(super) client: ClientConnection,
 }
 
 impl<S> std::fmt::Debug for VerifiedTlsConnection<S> {
@@ -157,10 +157,7 @@ where
     check(&mut pending, socket_io, &mut current_context)?;
     check_negotiated_profile(&client).map_err(TlsHandshakeError::Policy)?;
     check(&mut pending, socket_io, &mut current_context)?;
-    Ok(VerifiedTlsConnection {
-        _pending: pending,
-        _client: client,
-    })
+    Ok(VerifiedTlsConnection { pending, client })
 }
 
 fn check<S, O, C>(
@@ -177,7 +174,7 @@ where
         .map_err(TlsHandshakeError::Context)
 }
 
-fn wait<S, O, C>(
+pub(super) fn wait<S, O, C>(
     pending: &mut PendingConnection<S>,
     io: &O,
     interest: TlsInterest,
@@ -198,18 +195,20 @@ where
                 .socket_mut(current_context(), io.now())
                 .map_err(TlsHandshakeError::Context)?;
             io.poll(socket, interest, timeout_ms)
-        }
-        .map_err(|_| TlsHandshakeError::SocketIo)?;
+        };
         check(pending, io, current_context)?;
-        if progress == PollProgress::Ready {
-            return Ok(());
+        match progress {
+            Ok(PollProgress::Ready) => return Ok(()),
+            Ok(PollProgress::Pending) => {}
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(_) => return Err(TlsHandshakeError::SocketIo),
         }
     }
 }
 
-struct SocketReader<'a, S, O> {
-    io: &'a O,
-    socket: &'a S,
+pub(super) struct SocketReader<'a, S, O> {
+    pub(super) io: &'a O,
+    pub(super) socket: &'a S,
 }
 
 impl<S, O: TlsIo<S>> Read for SocketReader<'_, S, O> {
@@ -218,9 +217,9 @@ impl<S, O: TlsIo<S>> Read for SocketReader<'_, S, O> {
     }
 }
 
-struct SocketWriter<'a, S, O> {
-    io: &'a O,
-    socket: &'a S,
+pub(super) struct SocketWriter<'a, S, O> {
+    pub(super) io: &'a O,
+    pub(super) socket: &'a S,
 }
 
 impl<S, O: TlsIo<S>> Write for SocketWriter<'_, S, O> {
