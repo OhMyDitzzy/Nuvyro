@@ -7,6 +7,7 @@ mod pending;
 #[cfg(test)]
 mod tests;
 
+pub(in crate::transport) use admission::PairedPermit;
 pub(crate) use admission::ReceiverAdmission;
 pub(crate) use context::ReceiverContext;
 pub(crate) use pending::PendingIncoming;

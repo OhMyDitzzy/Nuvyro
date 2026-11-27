@@ -11,6 +11,8 @@ const WINDOW: Duration = Duration::from_secs(60);
 struct State {
     closed: bool,
     active: usize,
+    paired: bool,
+    next_connection_id: u64,
     last_observed: Instant,
     attempts: [Option<Instant>; ATTEMPTS_PER_MINUTE],
 }
@@ -28,6 +30,8 @@ impl ReceiverAdmission {
             shared: Arc::new(Mutex::new(State {
                 closed: false,
                 active: 0,
+                paired: false,
+                next_connection_id: 1,
                 last_observed: now,
                 attempts: [None; ATTEMPTS_PER_MINUTE],
             })),
@@ -63,6 +67,11 @@ impl ReceiverAdmission {
                 *attempt = None;
             }
         }
+        let connection_id = state.next_connection_id;
+        let Some(next_connection_id) = connection_id.checked_add(1) else {
+            state.closed = true;
+            return Err(ReceiverError::Closed);
+        };
         let entry = state
             .attempts
             .iter_mut()
@@ -73,7 +82,11 @@ impl ReceiverAdmission {
             .ok_or(ReceiverError::DeadlineExceeded)?;
         *entry = Some(now);
         state.active += 1;
-        let permit = ReceiverPermit(Arc::clone(&self.shared));
+        state.next_connection_id = next_connection_id;
+        let permit = ReceiverPermit {
+            shared: Arc::clone(&self.shared),
+            connection_id,
+        };
         Ok(PendingIncoming::new(
             socket,
             self.context,
@@ -97,11 +110,34 @@ impl Drop for ReceiverAdmission {
     }
 }
 
-pub(super) struct ReceiverPermit(Arc<Mutex<State>>);
+pub(super) struct ReceiverPermit {
+    shared: Arc<Mutex<State>>,
+    connection_id: u64,
+}
 
 impl ReceiverPermit {
+    pub(super) fn reserve_pair(&self) -> Result<PairedPermit, ReceiverError> {
+        let mut state = self.shared.lock().map_err(|_| ReceiverError::Closed)?;
+        if state.closed {
+            return Err(ReceiverError::Closed);
+        }
+        if state.paired {
+            return Err(ReceiverError::Busy);
+        }
+        state.paired = true;
+        Ok(PairedPermit {
+            shared: Arc::clone(&self.shared),
+            connection_id: self.connection_id,
+        })
+    }
+
+    pub(super) fn owns_reservation(&self, reservation: &PairedPermit) -> bool {
+        self.connection_id == reservation.connection_id
+            && Arc::ptr_eq(&self.shared, &reservation.shared)
+    }
+
     pub(super) fn check_open(&self) -> Result<(), ReceiverError> {
-        let state = self.0.lock().map_err(|_| ReceiverError::Closed)?;
+        let state = self.shared.lock().map_err(|_| ReceiverError::Closed)?;
         if state.closed {
             Err(ReceiverError::Closed)
         } else {
@@ -112,8 +148,33 @@ impl ReceiverPermit {
 
 impl Drop for ReceiverPermit {
     fn drop(&mut self) {
-        if let Ok(mut state) = self.0.lock() {
+        if let Ok(mut state) = self.shared.lock() {
             state.active -= 1;
+        }
+    }
+}
+
+/// Reserved before PairResult is sent; ownership survives only a successful promotion.
+pub(in crate::transport) struct PairedPermit {
+    shared: Arc<Mutex<State>>,
+    connection_id: u64,
+}
+
+impl PairedPermit {
+    pub(super) fn check_open(&self) -> Result<(), ReceiverError> {
+        let state = self.shared.lock().map_err(|_| ReceiverError::Closed)?;
+        if state.closed {
+            Err(ReceiverError::Closed)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Drop for PairedPermit {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.shared.lock() {
+            state.paired = false;
         }
     }
 }

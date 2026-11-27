@@ -162,8 +162,15 @@ impl ReceiverIdentity {
 
     /// Construct only after this session's server TLS profile has been verified by its owner.
     pub(crate) fn incoming_gate(&self) -> Result<HandshakeGate, ErrorCode> {
-        let now = Instant::now();
-        self.validate_at(SystemTime::now(), now)?;
+        self.incoming_gate_at(SystemTime::now(), Instant::now())
+    }
+
+    pub(crate) fn incoming_gate_at(
+        &self,
+        wall: SystemTime,
+        now: Instant,
+    ) -> Result<HandshakeGate, ErrorCode> {
+        self.validate_at(wall, now)?;
         HandshakeGate::incoming(Arc::clone(&self.invitations), now)
     }
 

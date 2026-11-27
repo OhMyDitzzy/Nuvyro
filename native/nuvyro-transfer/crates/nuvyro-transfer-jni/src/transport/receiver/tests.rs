@@ -5,6 +5,8 @@ use std::time::{Duration, Instant};
 use super::*;
 use crate::transport::ConnectCancellation;
 
+mod pairing;
+
 struct Socket(Arc<AtomicUsize>);
 
 impl Drop for Socket {

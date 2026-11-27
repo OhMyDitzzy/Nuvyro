@@ -166,6 +166,38 @@ Transfer IDs, manifest consent, file access, and transfer readiness belong to
 subsequent operations. These private components have no engine/listener/UI
 activation or general application I/O entry point.
 
+## Incoming pairing operation
+
+`perform_receiver_pairing` consumes one pre-admitted socket and uses the same
+`ReceiverIdentity` for TLS and Hello/invitation authentication. It starts no
+listener or thread. Hello and authentication each have an absolute ten-second
+deadline; authentication time starts only after the complete Ack and its TLS
+records are flushed within the Hello budget. Retries and peer traffic never
+extend a deadline. Identity, context, admission, cancellation, and clock checks
+continue around reads, writes, and bounded polls.
+
+The receiver reads the six-byte header before the body into fixed 184-byte
+storage that is cleared on drop. It accepts only the expected Hello or
+PairAuthenticate, or a connection Error. Wrong direction, oversized or malformed
+input, and unsolicited plaintext already buffered at control boundaries close
+the connection. These checks do not detect every record still in the network or
+establish future liveness. Only Ack and PairResult are sent by this operation.
+
+After invitation authentication, the receiver reserves its one paired slot
+before sending PairResult. The reservation is bound to both the admission owner
+and the original connection. The unpaired slot remains held until PairResult
+and all TLS records are flushed, after which ownership is promoted. Failed
+sending or cancellation releases both slots without restoring the consumed
+invitation. A second valid authentication while a paired slot is held also
+consumes its invitation and fails closed. The TLS attempt limit is unchanged.
+
+`PairedIncoming` retains the socket, TLS state, and paired slot and exposes only
+the PairContext and bounded claimed display name. Its Debug omits that name.
+The name is a peer claim, not a permanent verified identity. Pairing grants no
+manifest consent, file capability, or transfer readiness; later operations must
+continue lifecycle and protocol-deadline checks. No engine or UI invokes this
+operation yet.
+
 ## Contracts and build
 
 - [Wire protocol](../../docs/transfer-protocol-v1.md)

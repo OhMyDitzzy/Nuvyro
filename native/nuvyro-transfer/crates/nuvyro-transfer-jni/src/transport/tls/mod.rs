@@ -4,6 +4,7 @@ mod certificate;
 mod client;
 mod driver;
 mod error;
+mod incoming_pairing;
 mod pairing;
 mod server;
 mod verifier;
@@ -18,6 +19,8 @@ pub(super) use driver::{
     TlsHandshakeError, TlsInterest, TlsIo, VerifiedTlsConnection, handshake_with,
 };
 pub(super) use error::TlsPolicyError;
+pub(in crate::transport) use incoming_pairing::pair_incoming_with;
+pub(crate) use incoming_pairing::{IncomingPairError, PairedIncoming};
 pub(super) use pairing::pair_outgoing_with;
 pub(crate) use pairing::{PairConnectionError, PairedConnection};
 pub(crate) use server::{IncomingTlsError, VerifiedIncoming};

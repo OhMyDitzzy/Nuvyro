@@ -120,7 +120,7 @@ fn check_profile(server: &ServerConnection) -> Result<(), TlsPolicyError> {
     }
 }
 
-fn check<S, O: ReceiverTlsIo<S>>(
+pub(super) fn check<S, O: ReceiverTlsIo<S>>(
     pending: &mut PendingIncoming<S>,
     io: &O,
     identity: &ReceiverIdentity,
@@ -137,7 +137,7 @@ fn check<S, O: ReceiverTlsIo<S>>(
         .map_err(IncomingTlsError::Identity)
 }
 
-fn wait<S, O: ReceiverTlsIo<S>>(
+pub(super) fn wait<S, O: ReceiverTlsIo<S>>(
     pending: &mut PendingIncoming<S>,
     io: &O,
     identity: &ReceiverIdentity,

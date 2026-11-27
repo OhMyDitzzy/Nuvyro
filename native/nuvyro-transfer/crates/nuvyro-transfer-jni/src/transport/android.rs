@@ -11,6 +11,7 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
 use super::budget::ConnectionBudget;
 use super::connector::{ConnectProgress, PollProgress, SocketOps, connect_with, poll_timeout};
+use super::tls::{IncomingPairError, PairedIncoming, pair_incoming_with};
 use super::tls::{IncomingTlsError, ReceiverTlsIo, VerifiedIncoming, handshake_incoming_with};
 use super::tls::{PairConnectionError, PairedConnection, pair_outgoing_with};
 use super::tls::{TlsHandshakeError, TlsInterest, TlsIo, VerifiedTlsConnection, handshake_with};
@@ -58,6 +59,14 @@ pub(crate) fn perform_receiver_handshake(
     current_context: impl FnMut() -> Option<ReceiverContext>,
 ) -> Result<VerifiedIncoming<Socket>, IncomingTlsError> {
     handshake_incoming_with(pending, &AndroidTlsIo, identity, current_context)
+}
+
+pub(crate) fn perform_receiver_pairing(
+    pending: PendingIncoming<Socket>,
+    identity: &ReceiverIdentity,
+    current_context: impl FnMut() -> Option<ReceiverContext>,
+) -> Result<PairedIncoming<Socket>, IncomingPairError> {
+    pair_incoming_with(pending, &AndroidTlsIo, identity, current_context)
 }
 
 struct AndroidTlsIo;

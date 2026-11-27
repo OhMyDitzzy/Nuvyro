@@ -8,6 +8,7 @@ use crate::transport::receiver::ReceiverError;
 use crate::transport::tls::{IncomingTlsError, TlsInterest, TlsPolicyError};
 use crate::transport::{ConnectCancellation, ReceiverAdmission, ReceiverContext};
 
+mod pairing;
 mod wire;
 use wire::{Event, Fault, Operation, Wire};
 

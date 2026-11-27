@@ -77,6 +77,7 @@ pub(super) struct Wire<'a> {
     pub(super) corrupt_finished: Cell<bool>,
     pub(super) peer_complete: Cell<bool>,
     pub(super) client: RefCell<ClientConnection>,
+    pub(super) qr: RefCell<Option<PairingQr>>,
     pub(super) inbound: RefCell<VecDeque<u8>>,
     saw_server: Cell<bool>,
 }
@@ -85,6 +86,14 @@ impl<'a> Wire<'a> {
     pub(super) fn new(identity: &'a ReceiverIdentity, admission: &'a ReceiverAdmission) -> Self {
         let (_, qr) = identity.create_invitation().unwrap();
         let qr = PairingQr::decode(qr.as_bytes()).unwrap();
+        Self::from_qr(identity, admission, qr)
+    }
+
+    pub(super) fn from_qr(
+        identity: &'a ReceiverIdentity,
+        admission: &'a ReceiverAdmission,
+        qr: PairingQr,
+    ) -> Self {
         let config = client_config(qr.spki_pin()).unwrap();
         let client = ClientConnection::new(config, "nuvyro.local".try_into().unwrap()).unwrap();
         Self {
@@ -110,6 +119,7 @@ impl<'a> Wire<'a> {
             corrupt_finished: Cell::new(false),
             peer_complete: Cell::new(false),
             client: RefCell::new(client),
+            qr: RefCell::new(Some(qr)),
             inbound: RefCell::default(),
             saw_server: Cell::new(false),
         }
