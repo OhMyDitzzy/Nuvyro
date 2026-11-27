@@ -12,7 +12,7 @@ mod tests;
 
 pub(crate) use client::{check_negotiated_profile, new_client};
 #[cfg(test)]
-pub(super) use driver::test_handshake_with_client;
+use driver::test_handshake_with_client;
 pub(super) use driver::{
     TlsHandshakeError, TlsInterest, TlsIo, VerifiedTlsConnection, handshake_with,
 };

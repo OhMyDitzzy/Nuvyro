@@ -46,7 +46,7 @@ impl<S> std::fmt::Debug for PairedConnection<S> {
 }
 
 /// One QR supplies the TLS pin, Hello SID and invitation on the same owned connection.
-pub(super) fn pair_outgoing_with<S, O, C>(
+pub(in crate::transport) fn pair_outgoing_with<S, O, C>(
     mut pending: PendingConnection<S>,
     io: &O,
     qr: PairingQr,

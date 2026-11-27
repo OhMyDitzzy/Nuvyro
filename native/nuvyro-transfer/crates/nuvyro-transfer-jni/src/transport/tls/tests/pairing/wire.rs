@@ -18,9 +18,7 @@ use crate::transport::budget::ConnectionBudget;
 use crate::transport::connector::{
     ConnectProgress, PendingConnection, PollProgress, SocketOps, connect_with,
 };
-use crate::transport::{
-    ConnectAttempt, ConnectCancellation, ConnectError, ConnectionContext, NumericEndpoint,
-};
+use crate::transport::{ConnectAttempt, ConnectCancellation, ConnectionContext, NumericEndpoint};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum Behavior {

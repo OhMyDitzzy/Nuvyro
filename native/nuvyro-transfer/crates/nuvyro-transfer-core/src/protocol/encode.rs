@@ -114,7 +114,11 @@ pub fn encode_message(message: &Message<'_>) -> Result<EncodedFrame, BodyError> 
             phase_bytes,
         } => {
             out.transfer(*context)?;
-            out.bytes(file_id.as_ref().map_or(&[0; 16], Id::as_bytes))?;
+            out.bytes(
+                file_id
+                    .as_ref()
+                    .map_or(&[0; 16], |id| id.as_bytes().as_slice()),
+            )?;
             out.bytes(&[*phase as u8])?;
             out.bytes(&phase_bytes.to_be_bytes())?;
         }
@@ -128,8 +132,16 @@ pub fn encode_message(message: &Message<'_>) -> Result<EncodedFrame, BodyError> 
             code,
             scope,
         } => {
-            out.bytes(pair_id.as_ref().map_or(&[0; 16], Id::as_bytes))?;
-            out.bytes(transfer_id.as_ref().map_or(&[0; 16], Id::as_bytes))?;
+            out.bytes(
+                pair_id
+                    .as_ref()
+                    .map_or(&[0; 16], |id| id.as_bytes().as_slice()),
+            )?;
+            out.bytes(
+                transfer_id
+                    .as_ref()
+                    .map_or(&[0; 16], |id| id.as_bytes().as_slice()),
+            )?;
             out.bytes(&(*code as u16).to_be_bytes())?;
             out.bytes(&[*scope as u8])?;
         }

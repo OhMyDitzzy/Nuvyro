@@ -10,13 +10,13 @@ use super::{TlsPolicyError, check_negotiated_profile, new_client};
 
 /// A private readiness direction for the nonblocking socket owned by the worker.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum TlsInterest {
+pub(in crate::transport) enum TlsInterest {
     Read,
     Write,
 }
 
 /// Performs only bounded socket I/O. The descriptor remains owned by PendingConnection.
-pub(super) trait TlsIo<S> {
+pub(in crate::transport) trait TlsIo<S> {
     fn now(&self) -> Instant;
     fn read(&self, socket: &S, bytes: &mut [u8]) -> io::Result<usize>;
     fn write(&self, socket: &S, bytes: &[u8]) -> io::Result<usize>;
@@ -52,7 +52,7 @@ pub(crate) enum TlsHandshakeError {
 /// `current_context` must return a fresh owner snapshot; None means the session/route is gone.
 /// Every socket operation is nonblocking and followed by cancellation, deadline, and context
 /// checks. Any error drops the socket and its connection-budget permit.
-pub(super) fn handshake_with<S, O, C>(
+pub(in crate::transport) fn handshake_with<S, O, C>(
     pending: PendingConnection<S>,
     socket_io: &O,
     pin: &SpkiPin,
