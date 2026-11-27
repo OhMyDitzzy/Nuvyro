@@ -1,8 +1,7 @@
 # Transfer v1 security contract
 
-Status: P02 design requirements for protocol 1.0, not an audit or a claim of
-implemented security. See `transfer-protocol-v1.md` for exact layouts and limits.
-P05 must fail closed and pass the negative cases before pairing is complete.
+Security requirements for wire protocol 1.0. See `transfer-protocol-v1.md` for
+exact layouts and limits. Pairing must fail closed for the negative cases below.
 
 ## Trust boundaries
 
@@ -24,8 +23,8 @@ not solved here. Hashes are not malware detection or immutable source snapshots.
 - TLS 1.3 only, ALPN bytes `nuvyro-transfer/1` required on both peers. Disable
   early data/0-RTT, session tickets, resumption, and application auto-replay.
 - Receiver creates a fresh session key and self-signed X.509 leaf certificate.
-  Initial key/signature policy is P-256 ECDSA with SHA-256; P03 must verify the
-  selected rustls backend supports it on the actual Android target.
+  The key/signature policy is P-256 ECDSA with SHA-256. The selected crypto
+  provider must support it on the Android target.
 - One leaf, no intermediates, DER at most 4 KiB. Require SAN DNS `nuvyro.local`,
   digitalSignature key usage, serverAuth EKU, CA=false, and the allowed key type.
   Use that fixed server name for TLS validation/SNI, not DNS resolution.
@@ -81,21 +80,21 @@ No file content or transfer destination write occurs before that approval.
 
 ## Failure cases and required evidence
 
-| Attack/failure | Required behavior / evidence stage |
+| Attack/failure | Required behavior |
 | --- | --- |
-| Forged name/avatar/NSD, substituted endpoint | No transfer without QR pin, session match, token, and consent; P04/P05 |
-| Wrong SPKI, malformed cert, forged CertificateVerify, wrong ALPN/TLS version | Handshake fails, no file write; P05 |
-| Wrong, expired, consumed, previous-session token | Generic auth failure; key/token never logged; P05 |
-| Two simultaneous holders | Atomic token consume, one PairResult; P05 |
-| New connection with old token/approval | Fresh invitation required; approval replay rejected; P05/P06 |
-| Data before approval, changed manifest, wrong IDs/direction/order | Protocol failure before opening transfer destination; P04/P06 |
-| Huge length, truncated/invalid UTF-8, duplicate/gapped chunk | Bounded rejection without large allocation or commit; P04/P07 |
-| Traversal/control/bidi filename, conflicting name | Reject unsafe metadata; local no-overwrite naming; P06/P07 |
-| Source mutation, extra/truncated bytes, wrong hash | No FileCommitted; explicit failure and partial cleanup; P07 |
-| Lost network/Stop/cancel/stale worker | Generation invalidates late events; no revived session/QR; P03–P09 |
-| Permission loss/full disk/provider block/readback failure | No invented completion; bounded worker count and honest cleanup limits; P07 |
-| Export succeeds but receipt/ACK is lost | Preserve committed data, DeliveryUnconfirmed when appropriate, no auto-resend; P07/P10 |
-| Secret retention/backups/logging | No key/token/QR in saved state, backups, analytics, or logs; P05/P09/P11 |
+| Forged name/avatar/NSD, substituted endpoint | No transfer without QR pin, session match, token, and consent |
+| Wrong SPKI, malformed cert, forged CertificateVerify, wrong ALPN/TLS version | Handshake fails, no file write |
+| Wrong, expired, consumed, previous-session token | Generic auth failure; key/token never logged |
+| Two simultaneous holders | Atomic token consume, one PairResult |
+| New connection with old token/approval | Fresh invitation required; approval replay rejected |
+| Data before approval, changed manifest, wrong IDs/direction/order | Protocol failure before opening transfer destination |
+| Huge length, truncated/invalid UTF-8, duplicate/gapped chunk | Bounded rejection without large allocation or commit |
+| Traversal/control/bidi filename, conflicting name | Reject unsafe metadata; local no-overwrite naming |
+| Source mutation, extra/truncated bytes, wrong hash | No FileCommitted; explicit failure and partial cleanup |
+| Lost network/Stop/cancel/stale worker | Generation invalidates late events; no revived session/QR |
+| Permission loss/full disk/provider block/readback failure | No invented completion; bounded worker count and honest cleanup limits |
+| Export succeeds but receipt/ACK is lost | Preserve committed data, DeliveryUnconfirmed when appropriate, no auto-resend |
+| Secret retention/backups/logging | No key/token/QR in saved state, backups, analytics, or logs |
 
 Keep keys/tokens native except the QR display/scan boundary; minimize copies and
 use supported zeroization without promising every GC/library copy is erased.
@@ -104,17 +103,16 @@ Code review, negative tests, device tests, dependency advisory review, and later
 independent security review remain release gates. A compiler or header test alone
 does not establish any of the handshake, consent, or storage properties above.
 
-## Primary references reviewed for P02
+## References
 
 - TLS 1.3 CertificateVerify and replay limits: RFC 8446, sections 4.4.3 and 8,
   `https://www.rfc-editor.org/rfc/rfc8446.html`.
 - rustls certificate and TLS 1.3 signature verification responsibilities:
   `https://docs.rs/rustls/latest/rustls/client/danger/trait.ServerCertVerifier.html`.
-  The documentation snapshot was 0.23.46; no rustls dependency is selected yet.
 - Android opaque Network handles and per-socket network binding:
   `https://developer.android.com/ndk/reference/group/networking`.
 - Empty-stream hash fixture: official BLAKE3 `test_vectors/test_vectors.json`,
   `https://github.com/BLAKE3-team/BLAKE3/tree/master/test_vectors`.
 
 These sources inform requirements. They do not audit this application contract
-or establish that an uncompiled implementation satisfies it.
+or establish implementation conformance.

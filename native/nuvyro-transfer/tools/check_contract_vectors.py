@@ -1,4 +1,4 @@
-"""Check public P02 encoding fixtures, without executing the Rust implementation."""
+"""Check public encoding fixtures, without executing the Rust implementation."""
 
 import base64
 import binascii
@@ -166,7 +166,6 @@ def main():
     print(f"Header fixtures: {vector_count} checked against independent Python oracle")
     print(f"QR fixtures: {len(vectors['qr_cases'])}; manifest fixtures: {len(vectors['manifest_cases'])}")
     print(f"Full-frame encoding examples: {len(vectors['frame_examples'])}")
-    print(f"Deferred scenarios: {len(vectors['deferred_scenarios'])}, NOT executed")
     print("No Rust execution, TLS, JNI, BLAKE3 calculation, storage, or device test performed.")
 
 

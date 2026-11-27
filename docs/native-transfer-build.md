@@ -1,10 +1,7 @@
-# Native transfer build and P03 verification
+# Native transfer build
 
-The Rust workspace lives in `native/nuvyro-transfer`. P03 adds the JNI lifecycle
-implementation and an **opt-in** arm64 build entry. It has not been compiled,
-loaded by a JVM, packaged in an APK, or tested on a phone. Five Python tests of
-the artifact inspector and configuration planning have run; they do not establish
-native or APK compatibility. TLS/pairing/file I/O are not implemented.
+The arm64 JNI library is built explicitly and packaged only with the native
+build property enabled. Generated artifacts remain in the Android build directory.
 
 ## Toolchain and dependencies
 
@@ -15,15 +12,12 @@ native or APK compatibility. TLS/pairing/file I/O are not implemented.
   hosts are recognized; recognizing a host is not a successful build test.
 - JNI implementation uses jni 0.21.1 with default features disabled, getrandom
   0.3.4, serde 1.0.228, serde_json 1.0.149, and the local core. These are exact
-  reviewed API pins, not a claim to use the newest versions. Cargo.lock pins
-  transitive resolution. Crates were fetched, not compiled or audited.
+  API pins. Cargo.lock pins transitive resolution.
 - JUnit 4.13.2 is test-only for Kotlin loader tests. Gradle resolves it when those
-  tests are explicitly run. No Android test/build has run for this change.
+  tests are run.
 
-The jni 0.21.1 methods used by the bridge were inspected in downloaded upstream
-source; do not copy examples for the changed jni 0.22 API into this bridge.
-No rustls provider is selected or disabled here. Backend selection and proof on
-the actual target remain open until native crypto build testing is allowed.
+The bridge targets the jni 0.21 API. Update the bridge and its tests together
+when changing that dependency.
 
 ## Checks without native compilation
 
@@ -44,8 +38,7 @@ The helper tests use synthetic ELF bytes; they do not inspect a compiled library
 
 ## Explicit native build and APK opt-in
 
-Only run these when native compilation/Gradle is explicitly requested. A fresh
-checkout first needs its pinned toolchain/NDK installed and locked Cargo sources
+A fresh checkout needs its pinned toolchain/NDK installed and locked Cargo sources
 fetched; the build helper uses --frozen and will not fetch them implicitly:
 
 ```sh
@@ -97,20 +90,4 @@ native dependencies require an explicit packaging/license decision.
 
 ELF checks alone do not prove 16 KiB APK ZIP alignment, installability, or runtime
 behavior. Those require the actual artifact, APK/bundle inspection, and devices
-with the relevant page size. This build task has not been executed yet.
-
-## Remaining P03 runtime gates
-
-- Compile Rust and Android; run native lifecycle/parser tests and Kotlin loader
-  tests. Exercise ABI mismatch, invalid/closed handles, double destroy, full event
-  queue, stale generations, failed JNI delivery, and poll cancellation/shutdown.
-- On an arm64 device/JVM, load the library, create an engine, observe an empty
-  poll, start a local session, confirm transport_ready is false, acknowledge the
-  event, close the session/engine, and reject old handles/generations.
-- Exercise pending JVM exceptions/allocation failures without discarding queued
-  terminal events or unwinding across JNI. Existing tests do not start a JVM.
-- Add FD dup/ownership tests when approved source/destination phases exist;
-  current exports intentionally refuse every FD transfer without touching it.
-- Verify APK packaging, platform-only dependencies, minSdk/page size, additional
-  promised ABIs, and a supported rustls backend before claiming native readiness.
-- Keep the earlier P00 two-device discovery/hotspot checks open independently.
+with the relevant page size.

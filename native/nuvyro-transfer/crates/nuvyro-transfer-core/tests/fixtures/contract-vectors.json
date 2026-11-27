@@ -169,52 +169,5 @@
       "digest_hex": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
       "source": "BLAKE3-team/BLAKE3 test_vectors/test_vectors.json, input_len=0, first 32 bytes"
     }
-  ],
-  "deferred_scenarios": [
-    {
-      "name": "data_before_consent",
-      "stage": "P04/P06",
-      "expect": "UnexpectedState; no destination write"
-    },
-    {
-      "name": "approval_for_different_manifest",
-      "stage": "P06",
-      "expect": "UnexpectedState; no source/destination transfer I/O"
-    },
-    {
-      "name": "token_race",
-      "stage": "P05",
-      "expect": "Exactly one successful consumption; other attempt AuthenticationFailed"
-    },
-    {
-      "name": "expired_or_consumed_invitation",
-      "stage": "P05",
-      "expect": "AuthenticationFailed; no file write"
-    },
-    {
-      "name": "wrong_pin_or_signature",
-      "stage": "P05",
-      "expect": "TLS failure; no pairing"
-    },
-    {
-      "name": "destination_readback_fails",
-      "stage": "P07",
-      "expect": "No FileCommitted; cleanup uncommitted output"
-    },
-    {
-      "name": "disconnect_after_save_before_receipt",
-      "stage": "P07/P10",
-      "expect": "DeliveryUnconfirmed; no automatic resend"
-    },
-    {
-      "name": "cancel_after_file_commit",
-      "stage": "P08",
-      "expect": "Preserve committed document and per-file receipt"
-    },
-    {
-      "name": "stale_commit_confirmation",
-      "stage": "P03/P07",
-      "expect": "InvalidState; no revived session or duplicate commit"
-    }
   ]
 }

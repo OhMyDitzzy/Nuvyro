@@ -1,8 +1,6 @@
 # Transfer protocol 1.0
 
-Status: P02 implementation contract, frozen for the first implementation.
-This document specifies behavior to implement and test; it does not claim that
-TLS, pairing, or file transfer currently works. Incompatible changes require a
+This document specifies the wire format and required behavior. Incompatible changes require a
 version change and updated fixtures. Security requirements are in
 `transfer-security-v1.md`; the Android boundary is in `transfer-jni-v1.md`.
 
@@ -12,8 +10,8 @@ version change and updated fixtures. Security requirements are in
   exactly 1.0 initially; other major/minor versions or nonzero capabilities fail
   with `UnsupportedVersion`. There is no plaintext or older-protocol fallback.
 - Use one TCP/TLS connection, one paired sender, one pending offer, and one active
-  transfer per receiving engine. Files are sequential. P07 enables one file;
-  the wire format reserves a bounded batch for P08. No resume or compression.
+  transfer per receiving engine. Files are sequential; local capability/space
+  policy may limit the batch further. No resume or compression.
 - TLS transfer listener uses TCP **47739**. A bind conflict fails startup; no
   hidden port fallback. This is an application choice, not a registered service.
 - Advertise a separate NSD type **`_nuvyro-xfer._tcp.`**, TXT `v=1.0` and
@@ -44,7 +42,7 @@ not bearer authentication. All-zero IDs are allowed only where specified.
 normalization on the wire. A decoder rejects invalid lengths, trailing bytes,
 unknown enum values, and duplicate IDs. Strings are bounded before allocation.
 No JSON, CBOR, base64 file data, nested structures, or implicit native-endian
-fields occur on the TLS wire. Fixed layouts replace the earlier CBOR candidate.
+fields occur on the TLS wire.
 
 ## Frames and limits
 
@@ -62,7 +60,7 @@ state, ID, digest, or consent. Every frame is inside verified TLS.
 | --- | --- |
 | Control frame, including type | 65,536 bytes |
 | Canonical manifest | 61,440 bytes |
-| Files per wire offer | 1–128; P07 runtime limit is one |
+| Files per wire offer | 1–128, subject to local limits |
 | Filename | 1–255 UTF-8 bytes, with name rules below |
 | MIME | 1–128 visible ASCII bytes, `type/subtype`; fallback `application/octet-stream` |
 | DataChunk raw data | 1–262,144 bytes |
@@ -74,7 +72,7 @@ state, ID, digest, or consent. Every frame is inside verified TLS.
 | Concurrent unauthenticated connections | Two; never unbounded accept workers |
 
 These are protocol ceilings, not promises of storage capacity or release support.
-Local available-space, provider, and P07 restrictions can reject smaller offers
+Local available-space, provider, and capability restrictions can reject smaller offers
 before data. Unknown-size sources fail `UnsupportedFile`; preserve the draft.
 No `u64` is converted to Kotlin Int or floating point. Android-facing values must
 also fit signed Long; conversions fail rather than truncate.
@@ -261,7 +259,7 @@ all FileCommitted messages and the matching TransferComplete, then attempts
 CompleteAck. Loss of the final acknowledgement does not undo committed files.
 Missing receipt/batch confirmation after data may have been saved produces
 DeliveryUnconfirmed with confirmed per-file results, not automatic resend or
-an invented success. Reconciliation requires fresh authentication and is P10.
+an invented success. Reconciliation requires fresh authentication.
 
 SAF and the local receipt are not one atomic transaction. A crash between export
 and receipt can leave a file without a journal entry. Do not promise exactly-once,
@@ -269,11 +267,11 @@ atomic batches, arbitrary provider support, or power-loss durability. Never
 automatically execute/open a received file. Permission loss, full disk, SD removal,
 and provider errors are explicit outcomes; do not reuse a peer-supplied path.
 
-## Acceptance artifacts
+## Test vectors
 
-The Rust contract contains allocation-free header validation and protocol limits;
-full body/state parsing is P04. Header fixture tests are written but require an
-explicitly allowed Rust test run. `contract-vectors.json` separates syntactic
-wire examples from modeled semantic failures; neither is a TLS test or a claim
-that consent/storage is implemented. The empty-file hash vector is from the
-official BLAKE3 project. No fixture contains a usable invitation or private key.
+`tests/fixtures/frame-headers.txt` defines header allocation-bound cases.
+`contract-vectors.json` contains canonical QR/manifest encodings and complete
+frame examples. The Python checker validates artifact encodings independently
+of Rust; it does not test TLS, consent, or storage behavior. The empty-file hash
+vector comes from the official BLAKE3 project. Fixture IDs, pins, and tokens are
+public deterministic examples, never usable session secrets.

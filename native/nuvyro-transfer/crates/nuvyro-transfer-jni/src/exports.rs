@@ -102,7 +102,7 @@ fn reject_file_attachment(
             return Err(NativeStatus::InvalidArgument);
         }
     }
-    // P03 has no approved transfer or storage phase. Do not inspect, dup, or own a caller FD.
+    // FD attachment requires an approved transfer/storage phase. Do not inspect, dup, or own a caller FD.
     Err(NativeStatus::InvalidState)
 }
 

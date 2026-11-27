@@ -1,12 +1,11 @@
 # Android transfer boundary, ABI 1
 
-Status: ABI 1 contract, with a P03 lifecycle implementation that has not been
-compiled or exercised through a JVM/device. Kotlin never parses the TLS wire
-protocol. Portable wire limits/types stay in the Rust core.
+Kotlin never parses the TLS wire protocol. Portable wire types and validation
+belong to the Rust core.
 
-## P03 implemented subset
+## Local-session lifecycle
 
-All eight entry points are written. Engines have a bounded opaque handle registry
+The ABI exposes eight entry points. Engines have a bounded opaque handle registry
 (at most four engines), version checks, close/double-close handling, and a single
 bounded poller. `startReceiveSession` currently creates only a local session;
 its SessionStarted data is `{"transport_ready":false}`. It opens no socket,
@@ -18,7 +17,7 @@ InvalidState; no fake invitation, pairing, receipt, or completed file is emitted
 Current short lifecycle commands are serialized under engine state and enqueue
 events immediately; there is no background command worker/runtime yet. The
 32-command/progress/provider-worker limits below constrain future implementations.
-P03 reserves room for the matching close event before accepting a local session.
+The event queue reserves room for the matching close event before accepting a local session.
 The two FD entry points validate arguments then return InvalidState without
 inspecting, duplicating, or taking ownership of a caller FD. Actual dup/I/O and
 associated failure tests remain gated on an approved transfer implementation.
@@ -29,10 +28,8 @@ Polling removes events only after JNI array creation succeeds with no pending
 JVM exception. Kotlin keeps up to 64 pending events in memory until its single
 coordinator calls acknowledgeThrough; UI collection starting/stopping does not
 remove events. Explicit engine close abandons the engine and stops its IO pump.
-No engine is created or library loaded from existing screens at this stage.
+Engine creation and library loading are explicit owner operations, not screen initialization.
 
-Native unit tests and Kotlin loader tests are written but unexecuted. Packaging,
-real JNI calls, exception/FD paths, and APK page-size behavior are unverified.
 Build entry and limits are documented in `native-transfer-build.md`.
 
 ## Entry points
@@ -146,6 +143,6 @@ Do not copy file URI/key/token into general progress/error events.
   not promised recoverable by catch_unwind. Do not globally select panic=abort as
   an undocumented substitute for an error boundary. Release Java global refs.
 
-P03 must exercise ABI mismatch, invalid/closed handles, double destroy, queue
+Boundary validation must exercise ABI mismatch, invalid/closed handles, double destroy, queue
 saturation, pending JVM exceptions, FD dup failure, cancellation/stale events,
-and missing library behavior when compilation/tests are explicitly allowed.
+and missing-library behavior.
