@@ -13,7 +13,7 @@ The profile endpoint is separate from file transfer. The local-session API
 reports `transport_ready:false`; it does not advertise or authorize file access.
 FD attachment requires an approved transfer/storage phase.
 
-## Core decoding and integrity
+## Core framing and integrity
 
 Feed TLS plaintext to `StreamDecoder::push`, then process its single returned
 frame before feeding the unconsumed input suffix. Partial headers and bodies
@@ -24,7 +24,12 @@ The transport must cap its downstream data queue at four chunks.
 `Frame::decode` returns a borrowed `Message`; keep the frame alive while using
 its strings or chunk bytes. `Manifest::decode` preserves the original encoding
 and order and calculates the domain-prefixed BLAKE3 digest. Message and frame
-debug formatting omits tokens, names, and data.
+debug formatting omits tokens, names, and data. Owned inbound bodies are cleared
+on cancellation or drop. `encode_message` validates outgoing messages with the
+same wire policy and returns an `EncodedFrame` with redacted Debug and storage
+that is cleared on drop. The encoder reserves its bounded capacity before
+copying tokens. `encode_manifest` preserves the offered order and strings;
+consent must bind to those exact encoded bytes.
 
 `FileStreamVerifier` validates one expected file context, byte count, sequential
 offsets, and incremental BLAKE3. Its local `destination_ready` transition follows
@@ -73,6 +78,39 @@ failure. The returned TLS connection is opaque and exposes no application I/O.
 The driver is not connected to the JNI engine yet. Even a successful TLS profile
 check does not authenticate an invitation, match the secure session hello,
 authorize a file, or replace receiver consent.
+
+## Internal receiver identity and pairing control
+
+`ReceiverIdentity` owns a fresh P-256 session key, its self-signed certificate,
+and one invitation store bound to the same session ID and SPKI pin. Certificate
+validity is wall time minus five minutes through creation plus 24 hours. New
+server connections and invitations fail after expiry or close. The explicit
+ring server configuration accepts TLS 1.3 and the fixed ALPN, with tickets,
+session storage, early/half-RTT data, key logging, and secret extraction disabled.
+Temporary serialized key storage is cleared on drop; crypto-library copies have
+their own lifetimes. Closing/dropping the identity revokes its invitation store.
+The owning worker must poll `check_live` and abort/drop all existing connections
+on session expiry, generation changes, cancellation, or TLS errors.
+
+An invitation replaces the previous unused invitation, expires after 120
+monotonic seconds, and is consumed under the same lock as constant-time ID/token
+comparison. Five invalid attempts in a rolling minute invalidate it. Valid
+attempts remain consumed if pair allocation or the connection later fails.
+Invitation and pair IDs are checked against session-local ID history; the store
+retains at most 1,024 IDs, after which a new receiver session is required.
+
+After verified TLS, `HandshakeGate` sequences Hello/Ack and invitation/PairResult
+with separate absolute ten-second Hello and authentication deadlines. The owner
+must poll `check_time` even without peer traffic, send only the emitted control
+frames, and call `sent` only after each complete frame and pending TLS records
+have been flushed. Wrong direction, session, phase, or pre-pair Error IDs fail
+the gate permanently. Abort clears retained credentials; the outgoing scan is
+dropped as soon as its authentication frame is encoded. The receiver reports a
+`PairContext` only after PairResult is flushed; the sender reports the matching
+context after receiving it. This context contains session and pair IDs only.
+Transfer IDs, manifest consent, file access, and transfer readiness belong to
+subsequent operations. These private components have no engine/listener/UI
+activation or general application I/O entry point.
 
 ## Contracts and build
 

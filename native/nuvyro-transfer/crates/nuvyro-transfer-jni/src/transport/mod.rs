@@ -13,6 +13,10 @@ mod tests;
 
 pub(crate) use attempt::{ConnectAttempt, ConnectCancellation, ConnectionContext};
 pub(crate) use endpoint::NumericEndpoint;
+#[cfg(test)]
+pub(crate) use tls::{
+    check_negotiated_profile as test_check_tls_profile, new_client as test_tls_client,
+};
 
 #[cfg(target_os = "android")]
 pub(crate) use android::{connect, perform_tls_handshake};

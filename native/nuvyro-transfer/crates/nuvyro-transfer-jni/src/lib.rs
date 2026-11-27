@@ -9,6 +9,8 @@ pub mod contract;
 mod engine;
 mod events;
 mod exports;
+#[cfg(any(target_os = "android", test))]
+mod pairing;
 mod registry;
 #[cfg(any(target_os = "android", test))]
 mod transport;

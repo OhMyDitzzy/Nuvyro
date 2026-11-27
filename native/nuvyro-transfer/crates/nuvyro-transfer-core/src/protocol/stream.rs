@@ -1,5 +1,7 @@
 use std::fmt;
 
+use zeroize::Zeroizing;
+
 use super::limits::HEADER_BYTES;
 use super::{BodyError, FrameHeader, HeaderError, Message};
 
@@ -15,7 +17,7 @@ pub enum StreamError {
 /// One owned body, with no implicit queue and no secret-bearing Debug output.
 pub struct Frame {
     header: FrameHeader,
-    body: Vec<u8>,
+    body: Zeroizing<Vec<u8>>,
 }
 
 impl Frame {
@@ -51,7 +53,7 @@ pub struct StreamDecoder {
     prefix: [u8; HEADER_BYTES],
     prefix_used: usize,
     header: Option<FrameHeader>,
-    body: Vec<u8>,
+    body: Zeroizing<Vec<u8>>,
     closed: bool,
 }
 
@@ -135,7 +137,7 @@ impl StreamDecoder {
 
     /// Idempotently release any partially received frame.
     pub fn cancel(&mut self) {
-        self.body = Vec::new();
+        self.body = Zeroizing::new(Vec::new());
         self.prefix = [0; HEADER_BYTES];
         self.prefix_used = 0;
         self.header = None;

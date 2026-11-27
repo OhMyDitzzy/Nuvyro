@@ -1,6 +1,7 @@
 //! Protocol 1.0 definitions. See docs/transfer-protocol-v1.md in the repository.
 
 mod cursor;
+mod encode;
 mod error;
 mod frame;
 pub mod limits;
@@ -8,6 +9,7 @@ mod manifest;
 mod message;
 mod stream;
 
+pub use encode::{EncodedFrame, encode_manifest, encode_message};
 pub use error::{BodyError, ErrorCode, HeaderError};
 pub use frame::{FrameHeader, MessageKind};
 pub use manifest::{Manifest, ManifestEntry};

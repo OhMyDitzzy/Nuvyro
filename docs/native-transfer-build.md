@@ -19,9 +19,11 @@ build property enabled. Generated artifacts remain in the Android build director
   0.17.14, x509-parser 0.18.1 with verify, subtle 2.6.1, and zeroize 1.9.2.
   The builder supplies the NDK target C compiler/archiver for ring's bundled
   C/assembly; no system TLS library or trust store is used by this policy.
-- Core QR decoding pins base64 0.23.1 and zeroize 1.9.2 without default features.
-  Native TLS tests use rcgen 0.14.10 to generate ephemeral test identities in
-  memory, without PEM support or private-key fixtures on disk.
+- QR decoding/encoding pins base64 0.23.1 without default features. Both crates
+  enable zeroize 1.9.2's alloc feature for owned frame buffers. Receiver session
+  identities and TLS tests use rcgen 0.14.10 with crypto/ring/zeroize, without
+  PEM support or persisted keys. These are runtime JNI dependencies as well as
+  test dependencies; packaging must include their transitive requirements.
 
 The bridge targets the jni 0.21 API. Update the bridge and its tests together
 when changing that dependency.

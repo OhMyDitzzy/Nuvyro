@@ -113,6 +113,135 @@ fn manifest_artifact_vectors_match_the_native_decoder() {
 }
 
 #[test]
+fn outbound_encoder_reproduces_every_canonical_full_frame_example() {
+    for example in vectors()["frame_examples"].as_array().unwrap() {
+        let bytes = hex(example["hex"].as_str().unwrap());
+        let header: [u8; 6] = bytes[..6].try_into().unwrap();
+        let header = FrameHeader::decode(&header).unwrap();
+        let message = Message::decode(header, &bytes[6..]).unwrap();
+        let encoded = nuvyro_transfer_core::protocol::encode_message(&message).unwrap();
+        assert_eq!(encoded.as_slice(), bytes, "{}", example["name"]);
+    }
+}
+
+#[test]
+fn outbound_encoder_rejects_invalid_messages_and_bounds_chunks() {
+    let context = nuvyro_transfer_core::protocol::TransferContext {
+        pair_id: nuvyro_transfer_core::protocol::Id::from_bytes([1; 16]).unwrap(),
+        transfer_id: nuvyro_transfer_core::protocol::Id::from_bytes([2; 16]).unwrap(),
+    };
+    let file = nuvyro_transfer_core::protocol::FileContext {
+        transfer: context,
+        file_id: nuvyro_transfer_core::protocol::Id::from_bytes([3; 16]).unwrap(),
+    };
+    let empty = Message::DataChunk {
+        context: file,
+        offset: 0,
+        bytes: &[],
+    };
+    assert_eq!(
+        nuvyro_transfer_core::protocol::encode_message(&empty).unwrap_err(),
+        BodyError::LimitExceeded
+    );
+    let invalid_file_ready = Message::FileReady {
+        context: file,
+        next_offset: 1,
+    };
+    assert_eq!(
+        nuvyro_transfer_core::protocol::encode_message(&invalid_file_ready).unwrap_err(),
+        BodyError::MalformedFrame
+    );
+    let chunk = vec![0x5a; MAX_CHUNK_BYTES as usize];
+    let largest = Message::DataChunk {
+        context: file,
+        offset: 0,
+        bytes: &chunk,
+    };
+    let encoded = nuvyro_transfer_core::protocol::encode_message(&largest).unwrap();
+    assert_eq!(encoded.as_slice().len(), MAX_CHUNK_BYTES as usize + 62);
+    let above = vec![0x5a; MAX_CHUNK_BYTES as usize + 1];
+    assert_eq!(
+        nuvyro_transfer_core::protocol::encode_message(&Message::DataChunk {
+            context: file,
+            offset: 0,
+            bytes: &above,
+        })
+        .unwrap_err(),
+        BodyError::LimitExceeded
+    );
+}
+
+#[test]
+fn manifest_encoder_preserves_canonical_vectors_and_rejects_duplicate_or_unsafe_entries() {
+    use nuvyro_transfer_core::protocol::{Id, ManifestEntry, encode_manifest};
+    for case in vectors()["manifest_cases"].as_array().unwrap() {
+        if case["expect"] != "ok" {
+            continue;
+        }
+        let bytes = hex(case["hex"].as_str().unwrap());
+        let decoded = Manifest::decode(&bytes).unwrap();
+        assert_eq!(encode_manifest(decoded.files()).unwrap(), bytes);
+    }
+    let file = ManifestEntry {
+        file_id: Id::from_bytes([0x55; 16]).unwrap(),
+        size: 0,
+        name: "safe.txt",
+        mime: "text/plain",
+    };
+    assert_eq!(encode_manifest(&[file, file]), Err(BodyError::DuplicateId));
+    assert_eq!(
+        encode_manifest(&[ManifestEntry {
+            name: "../escape",
+            ..file
+        }]),
+        Err(BodyError::UnsafeName)
+    );
+    assert_eq!(
+        encode_manifest(&[ManifestEntry {
+            size: MAX_FILE_BYTES + 1,
+            ..file
+        }]),
+        Err(BodyError::LimitExceeded)
+    );
+    assert_eq!(
+        encode_manifest(&[ManifestEntry {
+            mime: "bad",
+            ..file
+        }]),
+        Err(BodyError::MalformedFrame)
+    );
+}
+
+#[test]
+fn outbound_authentication_is_redacted_and_rejects_invalid_tokens_and_names() {
+    use nuvyro_transfer_core::protocol::{Id, encode_message};
+    let invitation_id = Id::from_bytes([0x22; 16]).unwrap();
+    let frame = encode_message(&Message::PairAuthenticate {
+        invitation_id,
+        token: &[0x44; 32],
+        claimed_sender_name: "Claimed name",
+    })
+    .unwrap();
+    assert_eq!(format!("{frame:?}"), "EncodedFrame([REDACTED])");
+    assert!(
+        encode_message(&Message::PairAuthenticate {
+            invitation_id,
+            token: &[0; 32],
+            claimed_sender_name: "Sender",
+        })
+        .is_err()
+    );
+    assert!(
+        encode_message(&Message::PairAuthenticate {
+            invitation_id,
+            token: &[0x44; 32],
+            claimed_sender_name: "\u{85}",
+        })
+        .is_err()
+    );
+}
+
+#[test]
 fn manifest_rejects_every_truncated_encoding_and_unknown_schema() {
     let bytes = manifest(&[(1, 5, "hello.txt", "text/plain")]);
     for end in 0..bytes.len() {
@@ -299,7 +428,10 @@ fn all_registered_messages_have_a_valid_body_example() {
         (MessageKind::Error, [vec![0; 32], vec![0, 2, 0]].concat()),
     ];
     for (kind, bytes) in cases {
-        assert_eq!(decode(kind, &bytes).unwrap().kind(), kind);
+        let message = decode(kind, &bytes).unwrap();
+        assert_eq!(message.kind(), kind);
+        let encoded = nuvyro_transfer_core::protocol::encode_message(&message).unwrap();
+        assert_eq!(encoded.as_slice(), frame(kind, &bytes), "{kind:?}");
         let header = header(kind, bytes.len());
         for truncated in 0..bytes.len() {
             assert_eq!(

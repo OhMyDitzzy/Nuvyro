@@ -56,7 +56,7 @@ impl TryFrom<u16> for MessageKind {
 }
 
 impl MessageKind {
-    fn body_bounds(self) -> (u32, u32) {
+    pub(super) fn body_bounds(self) -> (u32, u32) {
         match self {
             Self::SessionHello | Self::SessionHelloAck => (24, 24),
             Self::PairAuthenticate => (51, 178),
