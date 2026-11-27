@@ -15,7 +15,7 @@ pub(crate) use attempt::{ConnectAttempt, ConnectCancellation, ConnectionContext}
 pub(crate) use endpoint::NumericEndpoint;
 
 #[cfg(target_os = "android")]
-pub(crate) use android::connect;
+pub(crate) use android::{connect, perform_tls_handshake};
 #[cfg(target_os = "android")]
 pub(crate) type PendingTlsSocket = connector::PendingConnection<socket2::Socket>;
 

@@ -40,6 +40,8 @@ pub(crate) struct PendingConnection<S> {
     socket: Option<S>,
     context: ConnectionContext,
     cancellation: ConnectCancellation,
+    started: Instant,
+    deadline: Instant,
     permit: Option<ConnectionPermit>,
 }
 
@@ -52,9 +54,21 @@ impl<S> PendingConnection<S> {
         &mut self,
         expected: ConnectionContext,
     ) -> Result<(), ConnectError> {
+        self.check_context_at(Some(expected), Instant::now())
+    }
+
+    pub(super) fn check_context_at(
+        &mut self,
+        current: Option<ConnectionContext>,
+        now: Instant,
+    ) -> Result<(), ConnectError> {
         let error = if self.cancellation.is_cancelled() || self.socket.is_none() {
             Some(ConnectError::Cancelled)
-        } else if expected != self.context {
+        } else if now < self.started {
+            Some(ConnectError::ClockInvalid)
+        } else if now >= self.deadline {
+            Some(ConnectError::DeadlineExceeded)
+        } else if current != Some(self.context) {
             Some(ConnectError::StaleContext)
         } else {
             None
@@ -65,6 +79,24 @@ impl<S> PendingConnection<S> {
         } else {
             Ok(())
         }
+    }
+
+    pub(super) fn socket_mut(
+        &mut self,
+        current: Option<ConnectionContext>,
+        now: Instant,
+    ) -> Result<&mut S, ConnectError> {
+        self.check_context_at(current, now)?;
+        self.socket.as_mut().ok_or(ConnectError::Cancelled)
+    }
+
+    pub(super) fn poll_window(
+        &mut self,
+        current: Option<ConnectionContext>,
+        now: Instant,
+    ) -> Result<Duration, ConnectError> {
+        self.check_context_at(current, now)?;
+        Ok((self.deadline - now).min(POLL_SLICE))
     }
 
     pub(crate) fn cancel(&mut self) {
@@ -124,10 +156,14 @@ pub(super) fn connect_with<O: SocketOps>(
     ops.verify_peer(&socket, address)
         .map_err(|_| ConnectError::ConnectFailed)?;
     attempt.check(ops.now())?;
+    let started = attempt.started_at();
+    let deadline = attempt.deadline();
     Ok(PendingConnection {
         socket: Some(socket),
         context: attempt.context,
         cancellation: attempt.cancellation,
+        started,
+        deadline,
         permit: Some(permit),
     })
 }

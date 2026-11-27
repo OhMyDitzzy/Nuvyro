@@ -48,7 +48,7 @@ must clear their own scan buffers and avoid copying secrets into logs or saved
 state. This does not promise erasure of copies left by moves or other libraries.
 The TTL hint must never create or extend the receiver's monotonic expiry.
 
-## Internal TLS client policy
+## Internal TLS client and handshake
 
 The transport-private client configuration uses an explicit ring provider and
 TLS 1.3 only, the fixed SNI name `nuvyro.local`, and ALPN `nuvyro-transfer/1`.
@@ -64,10 +64,15 @@ span of 86,700 seconds, and compares SHA-256 of the complete SPKI with the scann
 pin using constant-time comparison. TLS CertificateVerify is checked separately
 through rustls and its selected crypto provider; no public CA roots are trusted.
 
-Configuration performs no socket I/O. The worker owns Android Network binding,
-generation/cancellation, monotonic handshake deadlines, and resource limits.
-Successful TLS profile checks do not authenticate an invitation, match the
-secure session hello, authorize a file, or replace receiver consent.
+Client configuration performs no socket I/O. On Android, the private handshake
+driver takes ownership of the already connected, Network-bound socket and uses
+nonblocking reads, writes, and readiness polls. It keeps the original connect
+attempt's monotonic deadline, checks cancellation and the current native/route/
+Network/session context around each operation, and drops the socket on every
+failure. The returned TLS connection is opaque and exposes no application I/O.
+The driver is not connected to the JNI engine yet. Even a successful TLS profile
+check does not authenticate an invitation, match the secure session hello,
+authorize a file, or replace receiver consent.
 
 ## Contracts and build
 

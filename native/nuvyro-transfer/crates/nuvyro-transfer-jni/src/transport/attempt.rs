@@ -115,6 +115,14 @@ impl ConnectAttempt {
         self.cancellation.clone()
     }
 
+    pub(super) const fn started_at(&self) -> Instant {
+        self.started
+    }
+
+    pub(super) const fn deadline(&self) -> Instant {
+        self.deadline
+    }
+
     pub(super) fn check(&self, now: Instant) -> Result<(), ConnectError> {
         if self.cancellation.is_cancelled() {
             Err(ConnectError::Cancelled)
