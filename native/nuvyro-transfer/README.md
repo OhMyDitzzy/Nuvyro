@@ -5,20 +5,25 @@ share the same Git history; there is no Git submodule or separate Rust remote.
 
 ## Status
 
-The workspace contains the portable core and a JNI bridge crate configured to
-produce `libnuvyro_transfer_jni.so` in a future native build. P02 adds wire 1.0
-limits/message codes, allocation-free six-byte header validation, ABI 1 constants,
-and public contract fixtures. The package version remains independent of both
-the wire version and JNI ABI.
+The workspace contains the portable core and a JNI lifecycle bridge that targets
+`libnuvyro_transfer_jni.so`. P02 adds wire 1.0 limits/message codes, allocation-free
+six-byte header validation, ABI 1 constants, and public contract fixtures. P03
+adds entry points, an opaque engine registry, bounded local lifecycle events,
+Kotlin ownership/loading, and an explicit opt-in Android build entry. The package
+version remains independent of the wire version and JNI ABI.
 
-Full body/stream/state parsing, JNI entry points, Android loading/packaging, TLS,
-pairing, and file transfer are not implemented. The Android app does not load or
-build these crates yet. Rust compilation and the Rust fixture test remain unverified.
+Nothing here has been compiled, loaded into a JVM, or tested through an APK.
+Only local session creation/close is implemented; SessionStarted explicitly has
+`transport_ready:false`. No existing screen creates an engine or loads the library.
+Full wire body/stream/state parsing, TLS/pairing, approved FD I/O, and file transfer
+remain unimplemented. FD entry points refuse ownership with InvalidState.
 
 The implementation contracts are [wire 1.0](../../docs/transfer-protocol-v1.md),
 [security](../../docs/transfer-security-v1.md), and
 [JNI ABI 1](../../docs/transfer-jni-v1.md). These define behavior to implement,
 not an audited or operational transfer protocol.
+See [native build/verification](../../docs/native-transfer-build.md) for the P03
+implemented subset, safe checks, opt-in packaging, and remaining runtime gates.
 
 ## Layout
 
@@ -62,15 +67,17 @@ Run these from `native/nuvyro-transfer`:
 cargo metadata --format-version 1 --no-deps --frozen
 cargo fmt --all -- --check
 python3 tools/check_contract_vectors.py
+python3 -B tools/test_android_elf.py
 ```
 
 The Python command checks artifact encodings against an independent test oracle;
 it does not execute Rust or test TLS/JNI/storage. The Rust integration fixture test
 is written but has not been compiled or run. See the fixture README for scope.
 
-The workspace currently has no external dependencies. The bridge depends only
-on the local core crate. Commit `Cargo.lock`; keep `target/` and generated `.so`
-files out of Git. The lockfile and toolchain pin do not prove a build succeeds.
+The core remains independent of JNI/Android and external crates. The bridge pins
+jni 0.21.1, getrandom 0.3.4, serde 1.0.228, and serde_json 1.0.149 plus the local
+core. Locked dependencies were fetched without compiling them. Commit Cargo.lock;
+keep generated native outputs out of Git. Pins do not prove a build succeeds.
 
 Both crates have `publish = false`. No SPDX license is declared because the
 repository does not currently contain a license file; resolve licensing before
@@ -78,8 +85,8 @@ distribution rather than inferring a grant from the scaffold.
 
 ## Next steps
 
-P02 fixes the initial protocol, trust boundaries, resource limits, and completion
-contract. P03 implements JNI lifecycle and explicit Android build/packaging;
-P04 completes stream/body/state parsing and Network-bound transport. Add network
-and crypto dependencies only when those implementations need them. Native tests,
-TLS/pinning tests, and two-device verification are still required.
+P03 source implementation is present, but native compilation, JVM calls, APK
+packaging/page size, Rust/Kotlin tests, FD ownership, and crypto backend validation
+remain open. P04 completes stream/body/state parsing and Network-bound transport.
+Add network/crypto dependencies when those implementations need them; never
+disable checks to hide an unsupported build host or missing library.

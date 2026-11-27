@@ -1,8 +1,39 @@
 # Android transfer boundary, ABI 1
 
-Status: P02 contract. These methods/queues are implementation targets for P03
-and later milestones, not existing native entry points. Kotlin never parses the
-TLS wire protocol. Portable wire limits/types stay in the Rust core.
+Status: ABI 1 contract, with a P03 lifecycle implementation that has not been
+compiled or exercised through a JVM/device. Kotlin never parses the TLS wire
+protocol. Portable wire limits/types stay in the Rust core.
+
+## P03 implemented subset
+
+All eight entry points are written. Engines have a bounded opaque handle registry
+(at most four engines), version checks, close/double-close handling, and a single
+bounded poller. `startReceiveSession` currently creates only a local session;
+its SessionStarted data is `{"transport_ready":false}`. It opens no socket,
+advertises no service, and must not make Receive appear ready. `closeSession`
+invalidates that session and emits SessionClosed with the closed generation and
+the same `transport_ready:false` field. Other transfer/pairing commands return
+InvalidState; no fake invitation, pairing, receipt, or completed file is emitted.
+
+Current short lifecycle commands are serialized under engine state and enqueue
+events immediately; there is no background command worker/runtime yet. The
+32-command/progress/provider-worker limits below constrain future implementations.
+P03 reserves room for the matching close event before accepting a local session.
+The two FD entry points validate arguments then return InvalidState without
+inspecting, duplicating, or taking ownership of a caller FD. Actual dup/I/O and
+associated failure tests remain gated on an approved transfer implementation.
+
+Local event IDs are nonzero monotonic engine-local counters encoded as 32 hex
+digits, not authentication capabilities. Session IDs come from OS randomness.
+Polling removes events only after JNI array creation succeeds with no pending
+JVM exception. Kotlin keeps up to 64 pending events in memory until its single
+coordinator calls acknowledgeThrough; UI collection starting/stopping does not
+remove events. Explicit engine close abandons the engine and stops its IO pump.
+No engine is created or library loaded from existing screens at this stage.
+
+Native unit tests and Kotlin loader tests are written but unexecuted. Packaging,
+real JNI calls, exception/FD paths, and APK page-size behavior are unverified.
+Build entry and limits are documented in `native-transfer-build.md`.
 
 ## Entry points
 

@@ -1,4 +1,4 @@
-//! ABI 1 contract values; JNI entry points are implemented in a later milestone.
+//! ABI 1 bounds shared by the lifecycle implementation and future transfer operations.
 
 pub const ABI_VERSION: i32 = 1;
 pub const MAX_COMMAND_BYTES: usize = 65_536;

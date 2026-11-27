@@ -1,6 +1,6 @@
 [package]
 name = "nuvyro-transfer-jni"
-description = "Android JNI bridge scaffold for Nuvyro's transfer core"
+description = "Android JNI lifecycle bridge for Nuvyro's transfer core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 nuvyro-transfer-core = { path = "../nuvyro-transfer-core" }
+getrandom = "=0.3.4"
+jni = { version = "=0.21.1", default-features = false }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.149", features = ["raw_value"] }
 
 [lints]
 workspace = true

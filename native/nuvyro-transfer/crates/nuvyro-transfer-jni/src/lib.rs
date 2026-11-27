@@ -1,7 +1,14 @@
-//! Foundation for the Android bridge to Nuvyro's transfer core.
-//!
-//! JNI entry points, engine handles, and Android packaging are not implemented yet.
+//! ABI 1 lifecycle bridge. Local sessions do not advertise, pair, or transfer files.
 
+#[cfg(panic = "abort")]
+compile_error!("The JNI lifecycle boundary requires panic=unwind");
+
+mod boundary;
+mod command;
 pub mod contract;
+mod engine;
+mod events;
+mod exports;
+mod registry;
 
 pub use nuvyro_transfer_core::ENGINE_VERSION;
