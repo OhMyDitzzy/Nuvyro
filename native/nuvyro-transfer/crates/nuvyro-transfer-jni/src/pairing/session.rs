@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use nuvyro_transfer_core::protocol::{ErrorCode, Id, TLS_ALPN};
@@ -19,6 +20,7 @@ const CLOCK_ALLOWANCE: Duration = Duration::from_secs(300);
 
 /// Session-local identity and its invitations; no key or ticket is persisted.
 pub(crate) struct ReceiverIdentity {
+    listener_claimed: AtomicBool,
     session: Id,
     pin: [u8; 32],
     config: Arc<ServerConfig>,
@@ -115,6 +117,7 @@ impl ReceiverIdentity {
         config.enable_secret_extraction = false;
         let session = random_id()?;
         Ok(Self {
+            listener_claimed: AtomicBool::new(false),
             session,
             pin,
             config: Arc::new(config),
@@ -134,6 +137,13 @@ impl ReceiverIdentity {
 
     pub(crate) fn session(&self) -> Id {
         self.session
+    }
+
+    /// A session has one listener owner across every interface/address and invitation refresh.
+    pub(crate) fn claim_listener(&self) -> bool {
+        self.listener_claimed
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
     pub(crate) fn pin(&self) -> &[u8; 32] {
         &self.pin

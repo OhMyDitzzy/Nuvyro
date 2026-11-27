@@ -59,6 +59,10 @@ internal class TransferNetworkSnapshot private constructor(
 
     fun gatewayHosts(): List<TransferHost> = gateways.toList()
 
+    fun localAddresses(): List<TransferLocalAddress> = prefixes.map {
+        TransferLocalAddress(it.local.toInetAddress(), it.bits)
+    }
+
     fun peer(address: InetAddress): TransferHost? {
         val host = TransferHost.from(address, interfaceIndex) ?: return null
         if (prefixes.any { it.local == host }) return null

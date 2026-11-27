@@ -14,7 +14,12 @@ mod tests;
 
 pub(crate) use attempt::{ConnectAttempt, ConnectCancellation, ConnectionContext};
 pub(crate) use endpoint::NumericEndpoint;
+pub(crate) use receiver::{
+    AcceptOutcome, AcceptedReceiver, ListenerError, ReceiverListener, ReceiverRoute, ReceiverRoutes,
+};
 pub(crate) use receiver::{PendingIncoming, ReceiverAdmission, ReceiverContext, ReceiverError};
+#[cfg(target_os = "android")]
+pub(crate) use receiver::{accept_receiver, open_receiver_listener, pair_accepted_receiver};
 #[cfg(test)]
 pub(crate) use tls::{
     check_negotiated_profile as test_check_tls_profile, new_client as test_tls_client,

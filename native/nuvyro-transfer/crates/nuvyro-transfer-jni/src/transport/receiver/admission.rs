@@ -46,6 +46,16 @@ impl ReceiverAdmission {
         cancellation: ConnectCancellation,
         now: impl FnOnce() -> Instant,
     ) -> Result<PendingIncoming<S>, ReceiverError> {
+        self.admit_since(socket, cancellation, None, now)
+    }
+
+    pub(in crate::transport) fn admit_since<S>(
+        &self,
+        socket: S,
+        cancellation: ConnectCancellation,
+        accepted_at: Option<Instant>,
+        now: impl FnOnce() -> Instant,
+    ) -> Result<PendingIncoming<S>, ReceiverError> {
         let mut state = self.shared.lock().map_err(|_| ReceiverError::Closed)?;
         if state.closed {
             return Err(ReceiverError::Closed);
@@ -59,6 +69,16 @@ impl ReceiverAdmission {
             return Err(ReceiverError::ClockInvalid);
         }
         state.last_observed = now;
+        let started = accepted_at.unwrap_or(now);
+        if now < started {
+            return Err(ReceiverError::ClockInvalid);
+        }
+        let deadline = started
+            .checked_add(super::super::attempt::MAX_CONNECT_TIME)
+            .ok_or(ReceiverError::DeadlineExceeded)?;
+        if now >= deadline {
+            return Err(ReceiverError::DeadlineExceeded);
+        }
         if state.active >= MAX_UNPAIRED {
             return Err(ReceiverError::Busy);
         }
@@ -77,9 +97,6 @@ impl ReceiverAdmission {
             .iter_mut()
             .find(|entry| entry.is_none())
             .ok_or(ReceiverError::RateLimited)?;
-        let deadline = now
-            .checked_add(super::super::attempt::MAX_CONNECT_TIME)
-            .ok_or(ReceiverError::DeadlineExceeded)?;
         *entry = Some(now);
         state.active += 1;
         state.next_connection_id = next_connection_id;

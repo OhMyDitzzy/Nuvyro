@@ -69,7 +69,7 @@ pub(crate) fn perform_receiver_pairing(
     pair_incoming_with(pending, &AndroidTlsIo, identity, current_context)
 }
 
-struct AndroidTlsIo;
+pub(in crate::transport) struct AndroidTlsIo;
 
 impl ReceiverTlsIo<Socket> for AndroidTlsIo {}
 

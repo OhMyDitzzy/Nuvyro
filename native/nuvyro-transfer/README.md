@@ -198,6 +198,52 @@ manifest consent, file capability, or transfer readiness; later operations must
 continue lifecycle and protocol-deadline checks. No engine or UI invokes this
 operation yet.
 
+## Internal receiver listener and routing
+
+`open_receiver_listener` owns a session's listening sockets, identity, admission,
+and cancellation. An atomic identity claim prevents a second listener owner
+from creating another admission budget for the same session. `ReceiverRoutes`
+contains numeric addresses assigned to one
+selected interface, validated prefixes, and the receiver context. At most 16
+local addresses are accepted. Every selected local address must bind on 47739;
+startup fails and releases all opened sockets if any bind or verification fails.
+There is no wildcard, port, address, or default-network fallback. IPv6 sockets
+are v6-only. Wi-Fi listeners bind the explicit nonzero Android Network before
+the local address; local-only hotspot listeners require no fabricated Network.
+
+The Android route reader uses the selected Wi-Fi Network, or the active hotspot
+reservation owner's current view of interfaces and all visible client Networks.
+Hotspot snapshots exclude client interfaces and addresses, including uplinks and
+VPNs, and require exactly one eligible unmanaged interface. Incomplete reads,
+ambiguous interfaces, missing reservation ownership, and oversized snapshots
+fail closed. These snapshots are routing policy, not proof of physical ingress
+or peer identity. The coordinator must refresh them and invalidate stale work;
+the Kotlin snapshot reader is not connected to a native engine or UI yet.
+
+Each `accept_receiver` call performs at most one readiness poll of at most 50 ms
+and one nonblocking accept. The accepted socket must retain close-on-exec and
+be made nonblocking. Its actual local address must match the polled listener,
+its queried peer must match accept's peer, and its unicast address and IPv6 scope
+must belong to the selected interface's most specific matching prefix. Self,
+subnet-boundary, client-local, wrong-scope, and off-subnet peers are rejected
+before TLS admission. Interrupted calls return control without a drain loop.
+
+Accepted sockets receive a distinct cancellation token and share the receiver's
+two-unpaired/eight-attempt/one-paired admission across every bound address. Time
+spent validating an accepted socket remains in its original ten-second TLS
+budget. `AcceptedReceiver` keeps the exact listener identity and route lease and
+can only be consumed by `pair_accepted_receiver`; it exposes no raw socket, FD,
+or plaintext I/O. Its pairing callback revalidates the full current routing
+snapshot, not just a potentially stale generation number.
+
+Listener close/drop, cancellation, route change, backward clock, or identity
+expiry revokes the session and admission. The listener's owning worker closes
+its descriptors; other workers observe revocation during their lifecycle checks.
+No thread, advertisement, engine readiness event, or UI is started by construction
+of the route reader. The native listener runs only when its owner explicitly
+opens and polls it. Runtime Android Network/hotspot behavior still requires
+platform validation.
+
 ## Contracts and build
 
 - [Wire protocol](../../docs/transfer-protocol-v1.md)

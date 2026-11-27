@@ -63,7 +63,7 @@ impl fmt::Debug for ConnectionContext {
 pub(crate) struct ConnectCancellation(Arc<AtomicBool>);
 
 impl ConnectCancellation {
-    pub(in crate::transport) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(Arc::new(AtomicBool::new(false)))
     }
 

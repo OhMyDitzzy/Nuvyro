@@ -12,6 +12,8 @@ use nuvyro_transfer_core::pairing::PairingQr;
 use crate::pairing::ReceiverIdentity;
 use crate::transport::budget::ConnectionBudget;
 use crate::transport::connector::{ConnectProgress, PollProgress, SocketOps, connect_with};
+use crate::transport::receiver::ListenerIo;
+use crate::transport::receiver::{AcceptOutcome, ReceiverListener, ReceiverRoute, ReceiverRoutes};
 use crate::transport::tls::incoming_pairing::pair_incoming_with;
 use crate::transport::tls::pairing::pair_outgoing_with;
 use crate::transport::tls::{ReceiverTlsIo, TlsInterest, TlsIo};
@@ -97,6 +99,52 @@ impl TlsIo<MemorySocket> for Io {
 
 struct Connector(RefCell<Option<MemorySocket>>);
 
+impl ListenerIo for Connector {
+    type Listener = SocketAddr;
+    type Socket = MemorySocket;
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+    fn open(&self, address: SocketAddr) -> io::Result<SocketAddr> {
+        Ok(address)
+    }
+    fn bind_network(&self, _: &SocketAddr, network: u64) -> io::Result<()> {
+        assert_eq!(network, 7);
+        Ok(())
+    }
+    fn bind(&self, listener: &SocketAddr, address: SocketAddr) -> io::Result<()> {
+        assert_eq!(*listener, address);
+        assert_eq!(address.port(), 47739);
+        Ok(())
+    }
+    fn listen(&self, _: &SocketAddr, backlog: i32) -> io::Result<()> {
+        assert_eq!(backlog, 2);
+        Ok(())
+    }
+    fn local_addr(&self, listener: &SocketAddr) -> io::Result<SocketAddr> {
+        Ok(*listener)
+    }
+    fn poll(&self, _: &SocketAddr, timeout: i32) -> io::Result<PollProgress> {
+        assert_eq!(timeout, 50);
+        Ok(PollProgress::Ready)
+    }
+    fn accept(&self, _: &SocketAddr) -> io::Result<(MemorySocket, SocketAddr)> {
+        Ok((
+            self.0.borrow_mut().take().unwrap(),
+            "192.168.42.3:12345".parse().unwrap(),
+        ))
+    }
+    fn configure(&self, _: &MemorySocket) -> io::Result<()> {
+        Ok(())
+    }
+    fn addresses(&self, _: &MemorySocket) -> io::Result<(SocketAddr, SocketAddr)> {
+        Ok((
+            "192.168.42.1:47739".parse().unwrap(),
+            "192.168.42.3:12345".parse().unwrap(),
+        ))
+    }
+}
+
 impl SocketOps for Connector {
     type Socket = MemorySocket;
     fn now(&self) -> Instant {
@@ -165,4 +213,70 @@ fn production_outgoing_and_incoming_operations_agree_on_one_pair_over_bounded_du
     assert_eq!(drops.load(Ordering::Relaxed), 2);
     assert!(outgoing_cancellation.is_cancelled());
     assert!(incoming_cancellation.is_cancelled());
+}
+
+#[test]
+fn listener_acceptance_preserves_identity_and_route_lease_through_duplex_pairing() {
+    let identity = Arc::new(ReceiverIdentity::create().unwrap());
+    let (_, qr) = identity.create_invitation().unwrap();
+    let qr = PairingQr::decode(qr.as_bytes()).unwrap();
+    let outgoing_context = ConnectionContext::new(1, 2, 7, *identity.session().as_bytes()).unwrap();
+    let incoming_context = ReceiverContext::new(3, 4, *identity.session().as_bytes()).unwrap();
+    let routes = ReceiverRoutes::wifi(
+        incoming_context,
+        7,
+        7,
+        &[ReceiverRoute::new(&[192, 168, 42, 1], 0, 24).unwrap()],
+    )
+    .unwrap();
+    let drops = Arc::new(AtomicUsize::new(0));
+    let (client_socket, server_socket) = MemorySocket::pair(&drops);
+    let client = Connector(RefCell::new(Some(client_socket)));
+    let server = Connector(RefCell::new(Some(server_socket)));
+    let budget = ConnectionBudget::new();
+    let outgoing = connect_with(
+        &client,
+        &budget,
+        ConnectAttempt::new(
+            outgoing_context,
+            NumericEndpoint::new(&[192, 168, 42, 1], 0, 47739).unwrap(),
+            Duration::from_secs(10),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut listener = ReceiverListener::open_with(
+        &server,
+        Arc::clone(&identity),
+        routes.clone(),
+        ConnectCancellation::new(),
+        || Some(routes.clone()),
+    )
+    .unwrap();
+    let accepted = match listener
+        .accept_with(&server, || Some(routes.clone()))
+        .unwrap()
+    {
+        AcceptOutcome::Accepted(value) => value,
+        _ => panic!("accepted connection required"),
+    };
+    let (outgoing, incoming) = std::thread::scope(|scope| {
+        let sender = scope.spawn(move || {
+            pair_outgoing_with(outgoing, &Io, qr, "Sender".to_owned(), || {
+                Some(outgoing_context)
+            })
+        });
+        let receiver = scope.spawn(|| accepted.pair_with(&Io, || Some(routes.clone())));
+        (
+            sender.join().unwrap().unwrap(),
+            receiver.join().unwrap().unwrap(),
+        )
+    });
+    assert_eq!(outgoing.pair(), incoming.pair());
+    assert_eq!(incoming.pair().secure_session_id, identity.session());
+    assert_eq!(incoming.claimed_name(), "Sender");
+    listener.close();
+    assert!(identity.check_live().is_err());
+    drop((outgoing, incoming));
+    assert_eq!(drops.load(Ordering::Relaxed), 2);
 }
