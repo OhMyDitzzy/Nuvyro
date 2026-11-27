@@ -1,0 +1,17 @@
+[package]
+name = "nuvyro-transfer-jni"
+description = "Android JNI bridge scaffold for Nuvyro's transfer core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "nuvyro_transfer_jni"
+crate-type = ["cdylib"]
+
+[dependencies]
+nuvyro-transfer-core = { path = "../nuvyro-transfer-core" }
+
+[lints]
+workspace = true
