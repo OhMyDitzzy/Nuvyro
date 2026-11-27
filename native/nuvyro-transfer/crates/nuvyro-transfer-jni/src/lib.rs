@@ -10,5 +10,7 @@ mod engine;
 mod events;
 mod exports;
 mod registry;
+#[cfg(any(target_os = "android", test))]
+mod transport;
 
 pub use nuvyro_transfer_core::ENGINE_VERSION;

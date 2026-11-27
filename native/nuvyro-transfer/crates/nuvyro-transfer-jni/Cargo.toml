@@ -17,5 +17,9 @@ jni = { version = "=0.21.1", default-features = false }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.149", features = ["raw_value"] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+libc = "=0.2.191"
+socket2 = { version = "=0.6.5", default-features = false }
+
 [lints]
 workspace = true
