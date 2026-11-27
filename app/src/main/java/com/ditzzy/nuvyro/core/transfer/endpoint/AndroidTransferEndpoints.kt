@@ -56,10 +56,21 @@ internal class AndroidTransferEndpoints(
     fun clearSelection(target: TransferTarget): Boolean = registry.clearSelection(target)
 
     @Synchronized
+    fun serviceKey(epoch: TransferNetworkEpoch, service: NsdServiceInfo): String? {
+        if (binding?.epoch !== epoch || !matchesNetwork(service)) return null
+        val name = service.serviceName ?: return null
+        val type = service.serviceType ?: return null
+        return name.takeIf {
+            TransferEndpointContract.acceptsName(it) && TransferEndpointContract.acceptsType(type)
+        }
+    }
+
+    @Synchronized
     fun beginResolution(epoch: TransferNetworkEpoch, service: NsdServiceInfo): TransferResolution? {
-        if (refresh(epoch) !== epoch || !matchesNetwork(service)) return null
+        if (refresh(epoch) !== epoch) return null
+        val name = serviceKey(epoch, service) ?: return null
         return registry.beginResolution(
-            epoch, service.serviceName ?: return null, service.serviceType ?: return null
+            epoch, name, TransferEndpointContract.ServiceType
         )
     }
 
@@ -89,8 +100,8 @@ internal class AndroidTransferEndpoints(
 
     @Synchronized
     fun serviceLost(epoch: TransferNetworkEpoch, service: NsdServiceInfo): Boolean {
-        if (binding?.epoch !== epoch || !matchesNetwork(service)) return false
-        return registry.serviceLost(epoch, service.serviceName ?: return false)
+        val name = serviceKey(epoch, service) ?: return false
+        return registry.serviceLost(epoch, name)
     }
 
     @Synchronized
