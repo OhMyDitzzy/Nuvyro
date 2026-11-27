@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod integrity;
+pub mod pairing;
 pub mod protocol;
 
 /// The engine package version, independent of wire and JNI ABI versions.

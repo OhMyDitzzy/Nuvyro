@@ -34,6 +34,20 @@ receipt persistence, or completion. The owning coordinator must enforce
 authentication, generation, consent, deadlines, file order, and storage policy,
 and close the connection on decoding or sequence failure.
 
+## Pairing QR input
+
+`PairingQr::decode` accepts borrowed scanner bytes with the exact pairing prefix,
+canonical unpadded base64url, a 512-byte text ceiling, and a fixed 104-byte decode
+buffer. It validates version, IDs, pin/token shape, port, and TTL hint. It performs
+no network, authentication, invitation consumption, or expiry decision.
+
+`PairingQr`, `SpkiPin`, and `InvitationToken` have redacted debug output and no
+implicit cloning or serialization. Pin/token access borrows their bytes; their
+owned storage and the temporary decoded buffer use zeroization on drop. Callers
+must clear their own scan buffers and avoid copying secrets into logs or saved
+state. This does not promise erasure of copies left by moves or other libraries.
+The TTL hint must never create or extend the receiver's monotonic expiry.
+
 ## Contracts and build
 
 - [Wire protocol](../../docs/transfer-protocol-v1.md)
