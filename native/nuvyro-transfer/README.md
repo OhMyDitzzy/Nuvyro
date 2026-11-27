@@ -48,6 +48,27 @@ must clear their own scan buffers and avoid copying secrets into logs or saved
 state. This does not promise erasure of copies left by moves or other libraries.
 The TTL hint must never create or extend the receiver's monotonic expiry.
 
+## Internal TLS client policy
+
+The transport-private client configuration uses an explicit ring provider and
+TLS 1.3 only, the fixed SNI name `nuvyro.local`, and ALPN `nuvyro-transfer/1`.
+Resumption, early data, key logging, and secret extraction are disabled. The
+owning worker must reject every TLS/I/O error and check the negotiated version,
+ALPN, and single peer certificate before queuing any application bytes.
+
+The verifier requires one X.509 v3 leaf of at most 4 KiB, an uncompressed P-256
+public key, ECDSA/SHA-256 self-signature, explicit CA=false, digitalSignature,
+serverAuth, and the fixed SAN DNS name. It rejects duplicate, malformed, and
+unhandled critical extensions, checks wall-time validity and a maximum validity
+span of 86,700 seconds, and compares SHA-256 of the complete SPKI with the scanned
+pin using constant-time comparison. TLS CertificateVerify is checked separately
+through rustls and its selected crypto provider; no public CA roots are trusted.
+
+Configuration performs no socket I/O. The worker owns Android Network binding,
+generation/cancellation, monotonic handshake deadlines, and resource limits.
+Successful TLS profile checks do not authenticate an invitation, match the
+secure session hello, authorize a file, or replace receiver consent.
+
 ## Contracts and build
 
 - [Wire protocol](../../docs/transfer-protocol-v1.md)

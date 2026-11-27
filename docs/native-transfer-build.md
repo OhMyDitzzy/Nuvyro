@@ -15,6 +15,13 @@ build property enabled. Generated artifacts remain in the Android build director
   API pins. Cargo.lock pins transitive resolution.
 - JUnit 4.13.2 is test-only for Kotlin loader tests. Gradle resolves it when those
   tests are run.
+- Internal TLS policy pins rustls 0.23.46 with only ring/std features, ring
+  0.17.14, x509-parser 0.18.1 with verify, subtle 2.6.1, and zeroize 1.9.2.
+  The builder supplies the NDK target C compiler/archiver for ring's bundled
+  C/assembly; no system TLS library or trust store is used by this policy.
+- Core QR decoding pins base64 0.23.1 and zeroize 1.9.2 without default features.
+  Native TLS tests use rcgen 0.14.10 to generate ephemeral test identities in
+  memory, without PEM support or private-key fixtures on disk.
 
 The bridge targets the jni 0.21 API. Update the bridge and its tests together
 when changing that dependency.

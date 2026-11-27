@@ -14,8 +14,17 @@ crate-type = ["cdylib"]
 nuvyro-transfer-core = { path = "../nuvyro-transfer-core" }
 getrandom = "=0.3.4"
 jni = { version = "=0.21.1", default-features = false }
+ring = { version = "=0.17.14", default-features = false }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.149", features = ["raw_value"] }
+subtle = { version = "=2.6.1", default-features = false }
+x509-parser = { version = "=0.18.1", default-features = false, features = ["verify"] }
+zeroize = { version = "=1.9.2", default-features = false }
+
+[dev-dependencies]
+base64 = { version = "=0.23.1", default-features = false }
+rcgen = { version = "=0.14.10", default-features = false, features = ["crypto", "ring", "zeroize"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 libc = "=0.2.191"

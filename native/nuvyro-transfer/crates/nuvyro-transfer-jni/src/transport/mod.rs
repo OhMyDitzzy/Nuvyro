@@ -6,6 +6,7 @@ mod attempt;
 mod budget;
 mod connector;
 mod endpoint;
+mod tls;
 
 #[cfg(test)]
 mod tests;
