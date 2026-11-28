@@ -30,6 +30,23 @@ Wi-Fi or active hotspot reservation, rejects stale events, and destroys the engi
 on route loss/change, cancellation, startup timeout, or native failure. Native
 shutdown requests cancellation and delegates worker joins away from the JNI caller.
 
+For Wi-Fi sessions, the coordinator starts `_nuvyro-xfer._tcp.` advertisement
+only after the matching `ReceiverListening` event. TXT contains only `v=1.0`
+and the secure session `sid`, and the port is 47739. Android 33+ scopes the
+registration to the selected Network; older versions use global NSD, which
+provides routing hints without Network provenance. Hotspot sessions use the
+gateway path and do not create a global registration or a fabricated Network.
+`Listening` describes native bindings; `advertised` becomes true only after the
+matching registration callback. Neither state grants pairing trust or file access.
+
+The coordinator cancels advertisement before requesting native session close.
+Registration failure, loss, or a ten-second startup timeout stops the owner.
+One process-wide transfer advertisement slot remains reserved until registration
+failure or successful unregistration is confirmed by a terminal callback. A stop
+request or unregistration failure alone does not release it. Late registration
+success triggers cleanup without restoring availability, and each request owns
+a distinct callback. Platform withdrawal and remote DNS cache expiry are asynchronous.
+
 The two FD entry points validate arguments then return InvalidState without
 inspecting, duplicating, or taking ownership of a caller FD. Actual dup/I/O and
 associated failure tests remain gated on an approved transfer implementation.

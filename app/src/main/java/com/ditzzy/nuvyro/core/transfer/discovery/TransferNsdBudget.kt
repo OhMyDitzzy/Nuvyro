@@ -13,6 +13,14 @@ internal class TransferNsdBudget {
 
     private var discoveries = 0
     private var resolutions = 0
+    private var advertisements = 0
+
+    @Synchronized
+    fun advertisement(): Lease? {
+        if (advertisements == 1) return null
+        advertisements++
+        return Lease { synchronized(this) { advertisements-- } }
+    }
 
     @Synchronized
     fun discovery(): Lease? {

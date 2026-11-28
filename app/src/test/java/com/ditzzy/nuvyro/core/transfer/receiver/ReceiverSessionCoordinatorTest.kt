@@ -5,10 +5,13 @@ import com.ditzzy.nuvyro.core.transfer.NativeTransferEvent
 import com.ditzzy.nuvyro.core.transfer.endpoint.TransferLocalAddress
 import com.ditzzy.nuvyro.core.transfer.endpoint.TransferNetworkSnapshot
 import java.net.InetAddress
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -33,6 +36,8 @@ class ReceiverSessionCoordinatorTest {
         var closed = 0
         var sessionCloses = 0
         var attachments = 0
+        var networkHandle: Long? = -1L
+        var beforeSessionClose: () -> Unit = {}
         var nextId = 1L
         val session = "22".repeat(16)
 
@@ -49,13 +54,14 @@ class ReceiverSessionCoordinatorTest {
         override suspend fun receiverRoutes(generation: Long, sessionId: String, routeGeneration: Long,
             routes: ReceiverRouteSnapshot, update: Boolean): NativeStatus {
             assertEquals(3L, generation); assertEquals(session, sessionId)
-            assertEquals(-1L, routes.networkHandle)
+            assertEquals(networkHandle, routes.networkHandle)
             if (update) { assertEquals(2L,routeGeneration); updated.complete(Unit) }
             else { assertEquals(1L,routeGeneration); attachments++; attached.complete(Unit) }
             return attachStatus
         }
         override suspend fun closeLocalSession(generation: Long, sessionId: String): NativeStatus {
             assertEquals(3L,generation); assertEquals(session,sessionId)
+            beforeSessionClose()
             sessionCloses++
             return NativeStatus.Accepted
         }
@@ -65,6 +71,117 @@ class ReceiverSessionCoordinatorTest {
         }
         override fun close() { closed++ }
         override suspend fun awaitClosed() { assertEquals(1,closed) }
+    }
+
+    private class Advertiser : ReceiverAdvertiser {
+        val started = CompletableDeferred<ReceiverAdvertisement>()
+        val stopped = CompletableDeferred<Unit>()
+        val callbacks = Channel<Unit>(Channel.UNLIMITED)
+        var starts = 0
+        override fun advertise(binding: ReceiverAdvertisement) = flow {
+            starts++
+            started.complete(binding)
+            try { for (callback in callbacks) emit(callback) }
+            finally { stopped.complete(Unit) }
+        }
+    }
+
+    @Test fun advertisement_requires_matching_listener_and_registers_only_once() = runBlocking {
+        val port = FakePort(); val advertiser = Advertiser()
+        val owner = ReceiverSessionCoordinator(port, advertiser)
+        val job = launch { owner.run(MutableStateFlow(routes())) }
+        withTimeout(2000) { port.attached.await() }
+        port.event("ReceiverListening", generation=2, route=1)
+        port.event("ReceiverListening", route=2)
+        withTimeout(2000) { port.pendingEvents.first { it.isEmpty() } }
+        assertFalse(advertiser.started.isCompleted)
+        port.event("ReceiverListening", route=1)
+        val binding = withTimeout(2000) { advertiser.started.await() }
+        assertEquals(3L, binding.generation)
+        assertEquals(port.session, binding.sessionId.hex)
+        assertEquals(1L, binding.routeGeneration)
+        assertEquals(-1L, binding.networkHandle)
+        assertFalse(owner.state.value.advertised)
+        advertiser.callbacks.send(Unit)
+        withTimeout(2000) { owner.state.first { it.advertised } }
+        port.event("ReceiverListening", route=1)
+        withTimeout(2000) { port.pendingEvents.first { it.isEmpty() } }
+        assertTrue(owner.state.value.advertised)
+        assertEquals(1, advertiser.starts)
+        job.cancelAndJoin()
+        assertTrue(advertiser.stopped.isCompleted)
+        assertFalse(owner.state.value.advertised)
+    }
+
+    @Test fun route_drift_cancels_advertisement_before_native_session_close() = runBlocking {
+        val port = FakePort(); val advertiser = Advertiser()
+        port.beforeSessionClose = { assertTrue(advertiser.stopped.isCompleted) }
+        val owner = ReceiverSessionCoordinator(port, advertiser)
+        val snapshots = MutableStateFlow<ReceiverRouteSnapshot?>(routes())
+        val job = launch { owner.run(snapshots) }
+        withTimeout(2000) { port.attached.await() }
+        port.event("ReceiverListening", route=1)
+        withTimeout(2000) { advertiser.started.await() }
+        snapshots.value = routes(2)
+        withTimeout(2000) { job.join() }
+        assertEquals(ReceiverSessionFailure.NetworkChanged, owner.state.value.failure)
+        assertEquals(1, port.sessionCloses)
+        advertiser.callbacks.trySend(Unit)
+        assertFalse(owner.state.value.advertised)
+    }
+
+    @Test fun failed_advertisement_closes_native_owner_without_retry() = runBlocking {
+        val port = FakePort(); val advertiser = Advertiser()
+        val owner = ReceiverSessionCoordinator(port, advertiser)
+        val job = launch { owner.run(MutableStateFlow(routes())) }
+        withTimeout(2000) { port.attached.await() }
+        port.event("ReceiverListening", route=1)
+        withTimeout(2000) { advertiser.started.await() }
+        advertiser.callbacks.close(IOException())
+        withTimeout(2000) { job.join() }
+        assertEquals(ReceiverSessionFailure.AdvertisementFailed, owner.state.value.failure)
+        assertEquals(1, advertiser.starts)
+        assertEquals(1, port.closed)
+        assertFalse(owner.state.value.advertised)
+    }
+
+    @Test fun listener_stop_in_same_batch_prevents_advertisement() = runBlocking {
+        val port = FakePort(); val advertiser = Advertiser()
+        val owner = ReceiverSessionCoordinator(port, advertiser)
+        val job = launch { owner.run(MutableStateFlow(routes())) }
+        withTimeout(2000) { port.attached.await() }
+        port.event("ReceiverListening", route=1)
+        port.event("ReceiverStopped", route=1)
+        withTimeout(2000) { job.join() }
+        assertFalse(advertiser.started.isCompleted)
+        assertEquals(1, port.closed)
+    }
+
+    @Test fun hotspot_listener_uses_gateway_path_without_global_advertisement() = runBlocking {
+        val port = FakePort().apply { networkHandle = null }; val advertiser = Advertiser()
+        val hotspot = ReceiverRouteSnapshot.hotspot(listOf(ReceiverInterfaceSnapshot(7, true, false,
+            routes().localAddresses())), emptyList())!!
+        val owner = ReceiverSessionCoordinator(port, advertiser)
+        val job = launch { owner.run(MutableStateFlow(hotspot)) }
+        withTimeout(2000) { port.attached.await() }
+        port.event("ReceiverListening", route=1)
+        withTimeout(2000) { owner.state.first { it.phase == ReceiverSessionPhase.Listening } }
+        assertFalse(advertiser.started.isCompleted)
+        assertFalse(owner.state.value.advertised)
+        job.cancelAndJoin()
+    }
+
+    @Test fun cancellation_revokes_pending_advertisement_before_native_close() = runBlocking {
+        val port = FakePort(); val advertiser = Advertiser()
+        port.beforeSessionClose = { assertTrue(advertiser.stopped.isCompleted) }
+        val owner = ReceiverSessionCoordinator(port, advertiser)
+        val job = launch { owner.run(MutableStateFlow(routes())) }
+        withTimeout(2000) { port.attached.await() }
+        port.event("ReceiverListening", route=1)
+        withTimeout(2000) { advertiser.started.await() }
+        job.cancelAndJoin()
+        assertEquals(ReceiverSessionFailure.Closed, owner.state.value.failure)
+        assertEquals(1, port.closed)
     }
 
     @Test fun listening_requires_current_listener_event() = runBlocking {

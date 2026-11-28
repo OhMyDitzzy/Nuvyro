@@ -3,6 +3,7 @@ package com.ditzzy.nuvyro.core.transfer.receiver
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.nsd.NsdManager
 import com.ditzzy.nuvyro.core.lan.LanPermission
 import com.ditzzy.nuvyro.core.transfer.NativeEngineOpenResult
 import com.ditzzy.nuvyro.core.transfer.NativeTransferEngine
@@ -20,19 +21,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Explicit single-use receive owner. Creating it performs no native or network operations. */
-internal class AndroidReceiverSession private constructor(private val monitor: AndroidReceiverRouteMonitor) : AutoCloseable {
+internal class AndroidReceiverSession private constructor(
+    private val monitor: AndroidReceiverRouteMonitor,
+    private val nsd: NsdManager?
+) : AutoCloseable {
     private val used = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val running = AtomicReference<Job?>(null)
     private val mutableState = MutableStateFlow(ReceiverSessionState(ReceiverSessionPhase.Starting))
     val state = mutableState.asStateFlow()
 
-    suspend fun runWifi(network: Network) = run(monitor.wifi(network))
+    suspend fun runWifi(network: Network) = run(monitor.wifi(network), AndroidReceiverAdvertiser(nsd, network))
 
     /** The caller retains the reservation and must revoke this callback when it is closed. */
-    suspend fun runHotspot(ownsReservation: () -> Boolean) = run(monitor.hotspot(ownsReservation))
+    suspend fun runHotspot(ownsReservation: () -> Boolean) = run(monitor.hotspot(ownsReservation), null)
 
-    private suspend fun run(routes: Flow<ReceiverRouteSnapshot?>) = withContext(Dispatchers.IO) {
+    private suspend fun run(routes: Flow<ReceiverRouteSnapshot?>, advertiser: ReceiverAdvertiser?) = withContext(Dispatchers.IO) {
         check(used.compareAndSet(false, true))
         coroutineScope {
             val job = currentCoroutineContext()[Job]!!
@@ -44,7 +48,7 @@ internal class AndroidReceiverSession private constructor(private val monitor: A
                 }
                 when (val result = NativeTransferEngine.open()) {
                     is NativeEngineOpenResult.Ready -> {
-                        val coordinator = ReceiverSessionCoordinator(result.engine)
+                        val coordinator = ReceiverSessionCoordinator(result.engine, advertiser)
                         val observer = launch { coordinator.state.collect { mutableState.value = it } }
                         try { coordinator.run(routes) }
                         finally { observer.cancel(); mutableState.value = coordinator.state.value }
@@ -71,7 +75,7 @@ internal class AndroidReceiverSession private constructor(private val monitor: A
             val app = context.applicationContext
             return AndroidReceiverSession(AndroidReceiverRouteMonitor(
                 app.getSystemService(ConnectivityManager::class.java), { LanPermission.isGranted(app) }
-            ))
+            ), app.getSystemService(NsdManager::class.java))
         }
     }
 }

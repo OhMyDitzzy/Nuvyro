@@ -3,9 +3,12 @@ package com.ditzzy.nuvyro.core.transfer.receiver
 import com.ditzzy.nuvyro.core.transfer.NativeCommandCodec
 import com.ditzzy.nuvyro.core.transfer.NativeStatus
 import com.ditzzy.nuvyro.core.transfer.NativeTransferEvent
+import com.ditzzy.nuvyro.core.transfer.endpoint.SecureSessionId
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -16,11 +19,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal enum class ReceiverSessionPhase { Starting, Attaching, Listening, Stopped }
-internal enum class ReceiverSessionFailure { NetworkUnavailable, NetworkChanged, NativeFailure, TimedOut, Closed }
-internal data class ReceiverSessionState(val phase: ReceiverSessionPhase, val failure: ReceiverSessionFailure? = null)
+internal enum class ReceiverSessionFailure { NetworkUnavailable, NetworkChanged, NativeFailure, AdvertisementFailed, TimedOut, Closed }
+internal data class ReceiverSessionState(
+    val phase: ReceiverSessionPhase,
+    val failure: ReceiverSessionFailure? = null,
+    val advertised: Boolean = false
+)
 
-/** Single-use owner. Listening authorizes neither file I/O nor service advertisement. */
-internal class ReceiverSessionCoordinator(private val native: ReceiverNativePort) {
+/** Single-use listener and advertisement owner. Neither operation authorizes file I/O. */
+internal class ReceiverSessionCoordinator(
+    private val native: ReceiverNativePort,
+    private val advertiser: ReceiverAdvertiser? = null
+) {
     private val used = AtomicBoolean(false)
     private val mutableState = MutableStateFlow(ReceiverSessionState(ReceiverSessionPhase.Starting))
     val state = mutableState.asStateFlow()
@@ -28,6 +38,8 @@ internal class ReceiverSessionCoordinator(private val native: ReceiverNativePort
     private sealed interface Signal {
         data class Routes(val snapshot: ReceiverRouteSnapshot?) : Signal
         data class Events(val events: List<NativeTransferEvent>) : Signal
+        data class Advertised(val binding: ReceiverAdvertisement) : Signal
+        data class AdvertisementFailed(val binding: ReceiverAdvertisement) : Signal
         data object Failed : Signal
     }
     private class Stopped(val reason: ReceiverSessionFailure) : RuntimeException()
@@ -39,6 +51,8 @@ internal class ReceiverSessionCoordinator(private val native: ReceiverNativePort
         try {
             coroutineScope {
                 val signals = Channel<Signal>(Channel.RENDEZVOUS)
+                var advertising: Job? = null
+                var advertisement: ReceiverAdvertisement? = null
                 val children = listOf(
                     launch { routes.collect { signals.send(Signal.Routes(it)) }; signals.send(Signal.Routes(null)) },
                     launch { native.pendingEvents.collect { signals.send(Signal.Events(it)) } },
@@ -53,6 +67,12 @@ internal class ReceiverSessionCoordinator(private val native: ReceiverNativePort
                     suspend fun consume() {
                         when (val signal = signals.receive()) {
                             Signal.Failed -> throw Stopped(ReceiverSessionFailure.NativeFailure)
+                            is Signal.Advertised -> if (signal.binding === advertisement) {
+                                mutableState.value = mutableState.value.copy(advertised = true)
+                            }
+                            is Signal.AdvertisementFailed -> if (signal.binding === advertisement) {
+                                throw Stopped(ReceiverSessionFailure.AdvertisementFailed)
+                            }
                             is Signal.Routes -> {
                                 val next = signal.snapshot ?: throw Stopped(ReceiverSessionFailure.NetworkUnavailable)
                                 if (snapshot?.sameRoutingAs(next) == false) {
@@ -74,7 +94,7 @@ internal class ReceiverSessionCoordinator(private val native: ReceiverNativePort
                                     } else if (event.generation == generation && event.sessionId == session) {
                                         when (event.kind) {
                                             "ReceiverListening" -> if (attached && event.routeGeneration == 1L) {
-                                                mutableState.value = ReceiverSessionState(ReceiverSessionPhase.Listening)
+                                                mutableState.value = mutableState.value.copy(phase = ReceiverSessionPhase.Listening)
                                             }
                                             "ReceiverStopped", "SessionClosed" -> throw Stopped(ReceiverSessionFailure.NativeFailure)
                                         }
@@ -88,6 +108,22 @@ internal class ReceiverSessionCoordinator(private val native: ReceiverNativePort
                             accepted(native.receiverRoutes(generation, session!!, 1, snapshot, false))
                             attached = true
                         }
+                        val handle = snapshot?.networkHandle
+                        if (mutableState.value.phase == ReceiverSessionPhase.Listening && advertisement == null &&
+                            advertiser != null && handle != null) {
+                            val binding = ReceiverAdvertisement(generation!!, SecureSessionId.parse(session!!)!!, 1, handle)
+                            advertisement = binding
+                            advertising = launch {
+                                try {
+                                    advertiser.advertise(binding).collect { signals.send(Signal.Advertised(binding)) }
+                                    signals.send(Signal.AdvertisementFailed(binding))
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (_: Exception) {
+                                    signals.send(Signal.AdvertisementFailed(binding))
+                                }
+                            }
+                        }
                     }
                     val listening = withTimeoutOrNull(10_000) {
                         while (mutableState.value.phase != ReceiverSessionPhase.Listening) consume()
@@ -97,6 +133,7 @@ internal class ReceiverSessionCoordinator(private val native: ReceiverNativePort
                     while (true) consume()
                 } finally {
                     children.forEach { it.cancel() }
+                    withContext(NonCancellable) { advertising?.cancelAndJoin() }
                     signals.cancel()
                 }
             }

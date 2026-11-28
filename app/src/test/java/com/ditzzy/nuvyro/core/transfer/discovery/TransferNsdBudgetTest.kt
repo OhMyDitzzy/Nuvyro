@@ -12,6 +12,21 @@ import org.junit.Test
 
 class TransferNsdBudgetTest {
     @Test
+    fun advertisement_slot_is_independent_and_terminal_release_is_idempotent() {
+        val budget = TransferNsdBudget()
+        val advertisement = requireNotNull(budget.advertisement())
+        assertNotNull(budget.discovery())
+        repeat(4) { assertNotNull(budget.resolution()) }
+        assertNull(budget.advertisement())
+        advertisement.complete()
+        val replacement = requireNotNull(budget.advertisement())
+        advertisement.complete()
+        assertNull(budget.advertisement())
+        replacement.complete()
+        assertNotNull(budget.advertisement())
+    }
+
+    @Test
     fun onlyOneTransferDiscoveryCanBeRegisteredAtATime() {
         val budget = TransferNsdBudget()
         val lease = requireNotNull(budget.discovery())

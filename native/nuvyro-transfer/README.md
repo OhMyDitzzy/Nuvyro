@@ -224,6 +224,14 @@ generation, SID and route generation, acknowledges owned events and waits for
 Route drift, lost permission/reservation, cancellation or native failure stops the
 session and requires a new identity; the UI does not start this owner yet.
 
+On selected Wi-Fi, the coordinator advertises the transfer service only after
+the matching native listener event, with public version/session TXT and fixed
+port 47739. The registration is scoped to that Network on Android 33+, while
+older NSD APIs are global routing hints. Hotspot receivers retain the gateway
+path without a fabricated Network. Cancellation revokes advertisement before
+native close; late callbacks only clean up their original registration. Platform
+unregistration is asynchronous and does not authorize or preserve a TLS session.
+
 Each `accept_receiver` call performs at most one readiness poll of at most 50 ms
 and one nonblocking accept. The accepted socket must retain close-on-exec and
 be made nonblocking. Its actual local address must match the polled listener,
