@@ -200,6 +200,23 @@ impl InvitationStore {
         state.closed = true;
         state.invitation = None;
     }
+
+    pub(super) fn revoke(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.invitation = None;
+        }
+    }
+
+    pub(super) fn expire(&self, now: Instant) {
+        if let Ok(mut state) = self.state.lock()
+            && state
+                .invitation
+                .as_ref()
+                .is_some_and(|invitation| now < invitation.issued || now >= invitation.expires)
+        {
+            state.invitation = None;
+        }
+    }
 }
 
 fn make_qr(

@@ -5,14 +5,15 @@ belong to the Rust core.
 
 ## Local-session lifecycle
 
-The ABI exposes eight entry points. Engines have a bounded opaque handle registry
+The ABI exposes ten entry points. Engines have a bounded opaque handle registry
 (at most four engines), version checks, close/double-close handling, and a single
 bounded poller. `startReceiveSession` currently creates only a local session;
 its SessionStarted data is `{"transport_ready":false}`. It opens no socket,
 advertises no service, and must not make Receive appear ready. `closeSession`
 invalidates that session and emits SessionClosed with the closed generation and
-the same `transport_ready:false` field. File and invitation/pairing commands return
-InvalidState; no fake invitation, pairing, receipt, or completed file is emitted.
+the same `transport_ready:false` field. File and JSON invitation/pairing commands
+return InvalidState. Invitations use the dedicated sensitive byte-array boundary
+described below; they never enter the general event queue.
 
 Lifecycle commands are serialized under engine state. `attachReceiver` starts an
 owned listener worker after strict route validation; its Accepted status does not
@@ -47,6 +48,21 @@ request or unregistration failure alone does not release it. Late registration
 success triggers cleanup without restoring availability, and each request owns
 a distinct callback. Platform withdrawal and remote DNS cache expiry are asynchronous.
 
+`nativeCreateInvitation` requires the current generation, 16-byte SID, route
+generation, and an active unpaired listener. It uses the listener's
+`ReceiverIdentity`, including its TLS pin and invitation store. The returned
+canonical pairing QR is 153 ASCII bytes, capped at 512 bytes by JNI. Creation
+replaces any unused native invitation. The coordinator reuses an available QR
+for concurrent requests and rejects delayed results after a route change.
+
+QR bytes are separate from JSON events, NSD, logs, saved state, and preferences.
+`ReceiverPairingQr` owns and wipes the delivered array; rendering copies must be
+wiped by their caller. Its monotonic deadline starts before the JNI call and is
+at most 120 seconds. Expiry, route drift, and owner shutdown clear the Kotlin
+payload and revoke native invitations. Native listener maintenance also removes
+expired tokens. Dispatcher cancellation wipes an undelivered JNI result.
+These measures do not erase copies retained by a renderer, JVM, or library.
+
 The two FD entry points validate arguments then return InvalidState without
 inspecting, duplicating, or taking ownership of a caller FD. Actual dup/I/O and
 associated failure tests remain gated on an approved transfer implementation.
@@ -76,6 +92,8 @@ Do not load native code from a Composable or build it while opening a screen.
 | nativeDestroyEngine(engine: long): int | Invalidate handle/generation, request cleanup, release ownership |
 | nativeSubmit(engine: long, command: byte[]): int | Validate and enqueue bounded UTF-8 JSON command |
 | nativePoll(engine: long, maxEvents: int, timeoutMs: int): byte[] | Bounded UTF-8 JSON event array, empty `[]` on timeout |
+| nativeCreateInvitation(engine: long, generation: long, sessionId: byte[], routeGeneration: long): byte[] | Sensitive bounded ASCII pairing QR for the active listener; throws on failure |
+| nativeClearInvitation(engine: long, generation: long, sessionId: byte[], routeGeneration: long): int | Revoke the invitation for the matching session and route |
 | nativeAttachSourceFd(engine: long, generation: long, transferId: byte[], fileId: byte[], fd: int): int | Duplicate borrowed FD synchronously, then enqueue |
 | nativeAttachDestinationFd(engine: long, generation: long, transferId: byte[], fileId: byte[], fd: int): int | Same ownership contract, private staging destination |
 
@@ -88,7 +106,8 @@ waits on such I/O and stale completions cannot authorize finalization.
 
 Status codes: 0 Accepted; 1 InvalidArgument; 2 InvalidHandle; 3 AbiMismatch;
 4 InvalidState; 5 QueueFull; 6 ResourceLimit; 7 InternalFailure.
-Accepted means queued, not completed. Async results are events. Create/poll
+For nativeSubmit, Accepted acknowledges command admission. Async results are
+events; dedicated invitation calls are synchronous and do not enqueue events. Create/poll
 failures throw `NativeTransferException(code: int)` with a fixed nonsensitive
 message; zero is never a usable returned engine handle. JNI allocation failures
 must preserve a pending JVM exception and clean native ownership.
@@ -115,7 +134,7 @@ Commands/events and their individual text fields obey the wire metadata limits.
 | --- | --- |
 | startReceiveSession | Empty; no active session; creates generation/session ID |
 | attachReceiver / updateReceiverRoutes | Current session; immutable routing snapshot described below |
-| createInvitation | Empty; current receiving session; returns sensitive QR event |
+| createInvitation | Reserved JSON command; returns InvalidState; use nativeCreateInvitation |
 | connectAndPair | qr_payload (bounded pairing text), network_handle (opaque decimal u64 string), endpoints (at most two) |
 | offerTransfer | files (1–128) with file_id, name, mime, size; paired/current transfer ID |
 | approveOffer / declineOffer | manifest_digest (64 lowercase hex); decline also reason (wire u16 enum) |
@@ -153,8 +172,9 @@ FileCommitted, TransferCompleted, Declined, Cancelled, DeliveryUnconfirmed,
 SessionClosed, and Failed. The associated request ID is zero for unsolicited
 peer-driven events. `data` uses the corresponding typed protocol metadata;
 Failed includes stable code/scope; Progress includes phase/file ID and exact
-decimal byte counters; InvitationCreated alone may carry the sensitive QR text.
-Do not copy file URI/key/token into general progress/error events.
+decimal byte counters. InvitationCreated is reserved and is not emitted; QR text
+is delivered only by nativeCreateInvitation. Do not copy file URI/key/token into
+general progress/error events.
 
 ## Ownership and scheduling
 

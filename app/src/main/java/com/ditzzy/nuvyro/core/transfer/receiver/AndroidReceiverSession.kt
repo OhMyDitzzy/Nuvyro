@@ -28,8 +28,11 @@ internal class AndroidReceiverSession private constructor(
     private val used = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val running = AtomicReference<Job?>(null)
+    private val coordinator = AtomicReference<ReceiverSessionCoordinator?>(null)
     private val mutableState = MutableStateFlow(ReceiverSessionState(ReceiverSessionPhase.Starting))
     val state = mutableState.asStateFlow()
+
+    suspend fun createPairingQr(): ReceiverPairingQr? = coordinator.get()?.createInvitation()
 
     suspend fun runWifi(network: Network) = run(monitor.wifi(network), AndroidReceiverAdvertiser(nsd, network))
 
@@ -49,9 +52,14 @@ internal class AndroidReceiverSession private constructor(
                 when (val result = NativeTransferEngine.open()) {
                     is NativeEngineOpenResult.Ready -> {
                         val coordinator = ReceiverSessionCoordinator(result.engine, advertiser)
+                        this@AndroidReceiverSession.coordinator.set(coordinator)
                         val observer = launch { coordinator.state.collect { mutableState.value = it } }
                         try { coordinator.run(routes) }
-                        finally { observer.cancel(); mutableState.value = coordinator.state.value }
+                        finally {
+                            this@AndroidReceiverSession.coordinator.compareAndSet(coordinator, null)
+                            observer.cancel()
+                            mutableState.value = coordinator.state.value
+                        }
                     }
                     else -> mutableState.value = ReceiverSessionState(ReceiverSessionPhase.Stopped, ReceiverSessionFailure.NativeFailure)
                 }

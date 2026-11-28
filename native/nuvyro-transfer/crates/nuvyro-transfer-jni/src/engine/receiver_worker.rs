@@ -39,6 +39,7 @@ pub(crate) trait ReceiverRuntime: Send + 'static {
         0
     }
     fn close(&mut self);
+    fn maintenance(&mut self) {}
 }
 
 struct ValidityState {
@@ -46,6 +47,7 @@ struct ValidityState {
     paired: bool,
     finished: bool,
     routes: Option<crate::transport::ReceiverRoutes>,
+    listening_route_generation: Option<u64>,
 }
 
 /// A pairing result belongs to the exact native session that accepted its socket.
@@ -68,6 +70,7 @@ impl SessionValidity {
                 paired: false,
                 finished: false,
                 routes: None,
+                listening_route_generation: None,
             }),
             finished: Condvar::new(),
         }
@@ -93,12 +96,48 @@ impl SessionValidity {
             return false;
         }
         state.paired = true;
+        state.listening_route_generation = None;
         true
     }
 
     pub(crate) fn current_routes(&self) -> Option<crate::transport::ReceiverRoutes> {
         let state = self.state.lock().ok()?;
         state.active.then(|| state.routes.clone()).flatten()
+    }
+
+    pub(crate) fn mark_listening(&self, route_generation: u64) -> bool {
+        let Ok(mut state) = self.state.lock() else {
+            return false;
+        };
+        let current = state
+            .routes
+            .as_ref()
+            .map_or(0, |routes| routes.context().route_generation());
+        if !state.active || state.paired || current != route_generation {
+            return false;
+        }
+        state.listening_route_generation = Some(route_generation);
+        true
+    }
+
+    pub(crate) fn mark_stopped(&self, route_generation: u64) {
+        if let Ok(mut state) = self.state.lock()
+            && state.listening_route_generation == Some(route_generation)
+        {
+            state.listening_route_generation = None;
+        }
+    }
+
+    pub(crate) fn is_listening_on(&self, route_generation: u64) -> bool {
+        self.state.lock().is_ok_and(|state| {
+            state.active
+                && !state.paired
+                && state.listening_route_generation == Some(route_generation)
+                && state
+                    .routes
+                    .as_ref()
+                    .is_some_and(|routes| routes.context().route_generation() == route_generation)
+        })
     }
 
     fn route_generation_matches(&self, generation: u64) -> bool {
@@ -131,6 +170,7 @@ impl SessionValidity {
             };
         }
         state.routes = Some(routes);
+        state.listening_route_generation = None;
         Ok(())
     }
 
@@ -159,6 +199,7 @@ impl SessionValidity {
     pub(crate) fn invalidate(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.active = false;
+            state.listening_route_generation = None;
         }
     }
 
@@ -357,6 +398,11 @@ where
             .validity
             .route_generation_matches(bound_route_generation)
     {
+        cleanup
+            .runtime
+            .as_mut()
+            .expect("runtime remains owned until worker exit")
+            .maintenance();
         cleanup.join_finished();
         while let Ok(result) = completed.try_recv() {
             if let Some((route_generation, connection)) = result

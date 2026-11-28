@@ -170,6 +170,14 @@ impl ReceiverIdentity {
             .map_err(|error| error.remote_code())
     }
 
+    pub(crate) fn clear_invitation(&self) {
+        self.invitations.revoke();
+    }
+
+    pub(crate) fn expire_invitation(&self, now: Instant) {
+        self.invitations.expire(now);
+    }
+
     /// Construct only after this session's server TLS profile has been verified by its owner.
     pub(crate) fn incoming_gate(&self) -> Result<HandshakeGate, ErrorCode> {
         self.incoming_gate_at(SystemTime::now(), Instant::now())

@@ -5,6 +5,13 @@ import com.ditzzy.nuvyro.core.transfer.endpoint.SecureSessionId
 import java.net.Inet6Address
 
 internal object ReceiverCommandCodec {
+    fun sessionIdBytes(sessionId: String): ByteArray {
+        require(SecureSessionId.parse(sessionId) != null)
+        return ByteArray(16) { index ->
+            sessionId.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+    }
+
     fun encode(generation: Long, sessionId: String, routeGeneration: Long,
         routes: ReceiverRouteSnapshot, update: Boolean): ByteArray {
         require(generation > 0 && routeGeneration > 0 && SecureSessionId.parse(sessionId) != null)

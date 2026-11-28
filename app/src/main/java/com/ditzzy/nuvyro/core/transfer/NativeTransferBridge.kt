@@ -7,6 +7,8 @@ internal object NativeTransferBridge {
     @JvmStatic external fun nativeDestroyEngine(engine: Long): Int
     @JvmStatic external fun nativeSubmit(engine: Long, command: ByteArray): Int
     @JvmStatic external fun nativePoll(engine: Long, maxEvents: Int, timeoutMs: Int): ByteArray
+    @JvmStatic external fun nativeCreateInvitation(engine: Long, generation: Long, sessionId: ByteArray, routeGeneration: Long): ByteArray
+    @JvmStatic external fun nativeClearInvitation(engine: Long, generation: Long, sessionId: ByteArray, routeGeneration: Long): Int
     @JvmStatic external fun nativeAttachSourceFd(engine: Long, generation: Long, transferId: ByteArray, fileId: ByteArray, fd: Int): Int
     @JvmStatic external fun nativeAttachDestinationFd(engine: Long, generation: Long, transferId: ByteArray, fileId: ByteArray, fd: Int): Int
 }

@@ -295,10 +295,93 @@ impl Engine {
         if worker.is_none() {
             return Err(NativeStatus::InvalidState);
         }
+        let previous_route = session
+            .receiver_validity
+            .current_routes()
+            .map(|current| current.context().route_generation());
         session
             .receiver_validity
             .update_routes(routes)
-            .map_err(|_| NativeStatus::InvalidState)
+            .map_err(|_| NativeStatus::InvalidState)?;
+        if previous_route
+            != session
+                .receiver_validity
+                .current_routes()
+                .map(|current| current.context().route_generation())
+        {
+            session.receiver_identity.clear_invitation();
+        }
+        Ok(())
+    }
+
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn create_invitation(
+        &self,
+        generation: u64,
+        session_id: &str,
+        route_generation: u64,
+    ) -> Result<crate::pairing::SensitiveQr, NativeStatus> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| NativeStatus::InternalFailure)?;
+        if state.closed {
+            return Err(NativeStatus::InvalidHandle);
+        }
+        let session = state.session.as_ref().ok_or(NativeStatus::InvalidState)?;
+        if session.generation != generation
+            || session.id != session_id
+            || !session.receiver_validity.matches(generation, session_id)
+            || !session.receiver_validity.is_listening_on(route_generation)
+        {
+            return Err(NativeStatus::InvalidState);
+        }
+        if self
+            .receiver_worker
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .is_none()
+        {
+            return Err(NativeStatus::InvalidState);
+        }
+        let (_, payload) = session
+            .receiver_identity
+            .create_invitation()
+            .map_err(|_| NativeStatus::InvalidState)?;
+        if !session.receiver_validity.is_listening_on(route_generation) {
+            session.receiver_identity.clear_invitation();
+            return Err(NativeStatus::InvalidState);
+        }
+        Ok(payload)
+    }
+
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn clear_invitation(
+        &self,
+        generation: u64,
+        session_id: &str,
+        route_generation: u64,
+    ) -> Result<(), NativeStatus> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| NativeStatus::InternalFailure)?;
+        if state.closed {
+            return Err(NativeStatus::InvalidHandle);
+        }
+        let session = state.session.as_ref().ok_or(NativeStatus::InvalidState)?;
+        if session.generation != generation
+            || session.id != session_id
+            || !session.receiver_validity.matches(generation, session_id)
+            || !session
+                .receiver_validity
+                .current_routes()
+                .is_some_and(|routes| routes.context().route_generation() == route_generation)
+        {
+            return Err(NativeStatus::InvalidState);
+        }
+        session.receiver_identity.clear_invitation();
+        Ok(())
     }
 
     #[cfg(any(target_os = "android", test))]
@@ -362,6 +445,14 @@ impl Engine {
                         })
                     {
                         return;
+                    }
+                    if listening {
+                        if !expected.receiver_validity.mark_listening(route_generation) {
+                            return;
+                        }
+                    } else {
+                        expected.receiver_validity.mark_stopped(route_generation);
+                        expected.receiver_identity.clear_invitation();
                     }
                     if listening
                         && (!expected.receiver_validity.is_active()
@@ -772,6 +863,82 @@ mod tests {
         assert_eq!(events[0]["kind"], "ReceiverStopped");
         assert_eq!(events[0]["data"]["route_generation"], "1");
         assert_eq!(events[0]["data"]["transport_ready"], false);
+    }
+
+    #[test]
+    fn invitation_requires_the_live_listener_and_exact_session_route() {
+        use crate::transport::{ReceiverContext, ReceiverRoute, ReceiverRoutes};
+        use nuvyro_transfer_core::pairing::PairingQr;
+
+        let engine = Engine::new();
+        start(&engine);
+        let session = engine.state.lock().unwrap().session.clone().unwrap();
+        let routes = ReceiverRoutes::wifi(
+            ReceiverContext::new(
+                session.generation,
+                1,
+                *session.receiver_identity.session().as_bytes(),
+            )
+            .unwrap(),
+            u64::MAX,
+            7,
+            &[ReceiverRoute::new(&[192, 168, 42, 1], 0, 24).unwrap()],
+        )
+        .unwrap();
+        session
+            .receiver_validity
+            .set_initial_routes(routes)
+            .unwrap();
+        let closed = Arc::new(AtomicBool::new(false));
+        engine
+            .attach_receiver_with::<IdleRuntime, _>(session.generation, &session.id, {
+                let closed = Arc::clone(&closed);
+                move |_| {
+                    Ok(IdleRuntime {
+                        route_generation: 1,
+                        closed,
+                    })
+                }
+            })
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !session.receiver_validity.is_listening_on(1) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(session.receiver_validity.is_listening_on(1));
+        assert!(matches!(
+            engine.create_invitation(session.generation, &session.id, 2),
+            Err(NativeStatus::InvalidState)
+        ));
+
+        let qr = engine
+            .create_invitation(session.generation, &session.id, 1)
+            .unwrap();
+        let decoded = PairingQr::decode(qr.as_bytes()).unwrap();
+        assert_eq!(
+            decoded.secure_session_id(),
+            session.receiver_identity.session()
+        );
+        assert!(qr.as_bytes().len() <= 512);
+        engine
+            .clear_invitation(session.generation, &session.id, 1)
+            .unwrap();
+        let replacement = engine
+            .create_invitation(session.generation, &session.id, 1)
+            .unwrap();
+        assert_ne!(qr.as_bytes(), replacement.as_bytes());
+
+        close_session(&engine);
+        assert!(matches!(
+            engine.create_invitation(session.generation, &session.id, 1),
+            Err(NativeStatus::InvalidState)
+        ));
+        assert!(
+            session
+                .receiver_validity
+                .wait_finished(Duration::from_secs(2))
+        );
+        assert!(closed.load(Ordering::Acquire));
     }
 
     struct PairRuntime(std::sync::Arc<PairControl>);

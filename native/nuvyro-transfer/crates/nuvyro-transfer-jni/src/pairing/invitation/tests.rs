@@ -158,6 +158,20 @@ fn closed_store_cannot_issue_or_authenticate() {
 }
 
 #[test]
+fn maintenance_drops_the_expired_zeroizing_invitation() {
+    let now = Instant::now();
+    let store = store();
+    let (invitation, qr) = store.issue(now).unwrap();
+    let parsed = PairingQr::decode(qr.as_bytes()).unwrap();
+    store.expire(now + Duration::from_secs(INVITATION_TTL_SECS));
+    assert!(store.state.lock().unwrap().invitation.is_none());
+    assert_eq!(
+        store.authenticate(invitation, parsed.token().expose_secret(), now),
+        Err(PairingError::AuthenticationFailed)
+    );
+}
+
+#[test]
 fn collision_tracking_exhaustion_is_bounded_and_consumes_a_valid_attempt() {
     let now = Instant::now();
     let store = store();

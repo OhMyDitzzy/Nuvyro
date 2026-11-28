@@ -6,6 +6,8 @@ use crate::boundary;
 use crate::command;
 use crate::contract::{ABI_VERSION, MAX_COMMAND_BYTES, NativeStatus};
 use crate::registry;
+use nuvyro_transfer_core::protocol::Id;
+use nuvyro_transfer_core::protocol::limits::MAX_PAIRING_QR_TEXT_BYTES;
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_ditzzy_nuvyro_core_transfer_NativeTransferBridge_nativeAbiVersion(
@@ -81,6 +83,92 @@ pub extern "system" fn Java_com_ditzzy_nuvyro_core_transfer_NativeTransferBridge
             }
             Ok(array.into_raw())
         })
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_ditzzy_nuvyro_core_transfer_NativeTransferBridge_nativeCreateInvitation(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    generation: jlong,
+    session_id: JByteArray<'_>,
+    route_generation: jlong,
+) -> jbyteArray {
+    boundary::throwing(&mut env, std::ptr::null_mut(), |env| {
+        if generation <= 0 || route_generation <= 0 {
+            return Err(NativeStatus::InvalidArgument);
+        }
+        let bytes = boundary::bytes(env, &session_id, 16)?;
+        let session_id = Id::from_bytes(
+            bytes
+                .try_into()
+                .map_err(|_| NativeStatus::InvalidArgument)?,
+        )
+        .map_err(|_| NativeStatus::InvalidArgument)?;
+        let session_id = session_id
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let engine = registry::get(handle)?;
+        let payload =
+            engine.create_invitation(generation as u64, &session_id, route_generation as u64)?;
+        if payload.as_bytes().is_empty() || payload.as_bytes().len() > MAX_PAIRING_QR_TEXT_BYTES {
+            let _ =
+                engine.clear_invitation(generation as u64, &session_id, route_generation as u64);
+            return Err(NativeStatus::ResourceLimit);
+        }
+        let array = match env.byte_array_from_slice(payload.as_bytes()) {
+            Ok(array) => array,
+            Err(_) => {
+                let _ = engine.clear_invitation(
+                    generation as u64,
+                    &session_id,
+                    route_generation as u64,
+                );
+                return Err(NativeStatus::InternalFailure);
+            }
+        };
+        if env.exception_check().unwrap_or(true) {
+            let _ =
+                engine.clear_invitation(generation as u64, &session_id, route_generation as u64);
+            return Err(NativeStatus::InternalFailure);
+        }
+        Ok(array.into_raw())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_ditzzy_nuvyro_core_transfer_NativeTransferBridge_nativeClearInvitation(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    generation: jlong,
+    session_id: JByteArray<'_>,
+    route_generation: jlong,
+) -> jint {
+    boundary::status(&mut env, |env| {
+        if generation <= 0 || route_generation <= 0 {
+            return Err(NativeStatus::InvalidArgument);
+        }
+        let bytes = boundary::bytes(env, &session_id, 16)?;
+        let session_id = Id::from_bytes(
+            bytes
+                .try_into()
+                .map_err(|_| NativeStatus::InvalidArgument)?,
+        )
+        .map_err(|_| NativeStatus::InvalidArgument)?;
+        let session_id = session_id
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        registry::get(handle)?.clear_invitation(
+            generation as u64,
+            &session_id,
+            route_generation as u64,
+        )
     })
 }
 

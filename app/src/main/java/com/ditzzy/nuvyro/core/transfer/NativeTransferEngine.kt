@@ -35,6 +35,28 @@ internal class NativeTransferEngine private constructor(initialHandle: Long) : R
     override suspend fun receiverRoutes(generation: Long, sessionId: String, routeGeneration: Long,
         routes: ReceiverRouteSnapshot, update: Boolean): NativeStatus =
         submit { ReceiverCommandCodec.encode(generation, sessionId, routeGeneration, routes, update) }
+    override suspend fun createInvitation(generation: Long, sessionId: String, routeGeneration: Long): ByteArray {
+        val acquired = AtomicReference<ByteArray?>(null)
+        try {
+            val payload = withContext(Dispatchers.IO) {
+                val current = handle.get()
+                if (current == 0L) throw NativeTransferException(NativeStatus.InvalidHandle.code)
+                NativeTransferBridge.nativeCreateInvitation(current, generation,
+                    ReceiverCommandCodec.sessionIdBytes(sessionId), routeGeneration).also(acquired::set)
+            }
+            acquired.set(null)
+            return payload
+        } finally {
+            // Cancellation can arrive after JNI allocates bytes, before the dispatcher returns.
+            acquired.getAndSet(null)?.fill(0)
+        }
+    }
+    override suspend fun clearInvitation(generation: Long, sessionId: String, routeGeneration: Long): NativeStatus = withContext(Dispatchers.IO) {
+        val current = handle.get()
+        if (current == 0L) NativeStatus.InvalidHandle
+        else NativeStatus.fromCode(NativeTransferBridge.nativeClearInvitation(current, generation,
+            ReceiverCommandCodec.sessionIdBytes(sessionId), routeGeneration))
+    }
     override suspend fun closeLocalSession(generation: Long, sessionId: String): NativeStatus =
         submit { NativeCommandCodec.closeSession(generation, sessionId) }
 

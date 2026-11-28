@@ -174,7 +174,8 @@ impl<'a> Wire<'a> {
                 Event::BackwardClock => self.time.set(self.time.get() - Duration::from_secs(1)),
                 Event::Deadline => self.time.set(self.time.get() + Duration::from_secs(10)),
                 Event::ExpiredWall => self.wall.set(self.wall.get() + Duration::from_secs(86_401)),
-                Event::EarlierWall => self.wall.set(self.wall.get() - Duration::from_secs(301)),
+                // Scheduling between identity creation and this fixture must not affect the fault.
+                Event::EarlierWall => self.wall.set(SystemTime::UNIX_EPOCH),
             }
         }
     }

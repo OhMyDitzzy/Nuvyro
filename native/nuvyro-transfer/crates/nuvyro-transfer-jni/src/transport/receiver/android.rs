@@ -54,13 +54,14 @@ pub(crate) fn receiver_runtime(
     let routes = validity.current_routes().ok_or(WorkerError::StartFailed)?;
     let bound_route_generation = routes.context().route_generation();
     let current_validity = Arc::clone(&validity);
-    let listener = open_receiver_listener(identity, routes, cancellation, move || {
+    let listener = open_receiver_listener(Arc::clone(&identity), routes, cancellation, move || {
         current_validity.current_routes()
     })
     .map_err(|_| WorkerError::StartFailed)?;
     Ok(AndroidReceiverRuntime {
         listener,
         validity,
+        identity,
         bound_route_generation,
     })
 }
@@ -68,6 +69,7 @@ pub(crate) fn receiver_runtime(
 struct AndroidReceiverRuntime {
     listener: ReceiverListener<Socket>,
     validity: Arc<crate::engine::receiver_worker::SessionValidity>,
+    identity: Arc<ReceiverIdentity>,
     bound_route_generation: u64,
 }
 
@@ -130,6 +132,11 @@ impl ReceiverRuntime for AndroidReceiverRuntime {
 
     fn close(&mut self) {
         self.listener.close();
+        self.identity.clear_invitation();
+    }
+
+    fn maintenance(&mut self) {
+        self.identity.expire_invitation(Instant::now());
     }
 }
 
