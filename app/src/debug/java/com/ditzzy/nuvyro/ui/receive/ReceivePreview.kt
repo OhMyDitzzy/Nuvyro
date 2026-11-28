@@ -5,6 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverSessionFailure
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverSessionPhase
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverSessionState
 import com.ditzzy.nuvyro.data.lan.LanStatus
 import com.ditzzy.nuvyro.data.hotspot.HotspotCredentials
 import com.ditzzy.nuvyro.data.hotspot.HotspotState
@@ -52,5 +55,22 @@ private fun ReceivePreview(@PreviewParameter(ReceivePreviewProvider::class) stat
                 onRetry = {}
             )
         }
+    }
+}
+
+internal class ReceiverSessionPreviewProvider : PreviewParameterProvider<ReceiverSessionState> {
+    override val values = sequenceOf(
+        ReceiverSessionState(ReceiverSessionPhase.Starting),
+        ReceiverSessionState(ReceiverSessionPhase.Stopped, ReceiverSessionFailure.NetworkUnavailable),
+        ReceiverSessionState(ReceiverSessionPhase.Stopped, ReceiverSessionFailure.NativeFailure)
+    )
+}
+
+@Preview(name = "Receive pairing status", widthDp = 360, heightDp = 800)
+@Preview(name = "Receive pairing large text", widthDp = 320, heightDp = 568, fontScale = 1.5f)
+@Composable
+private fun ReceiverSessionPreview(@PreviewParameter(ReceiverSessionPreviewProvider::class) session: ReceiverSessionState) {
+    NuvyroTheme {
+        ReceiveScreen(LanStatus.Active, name = "Alex", photo = null, onStop = {}, receiverSession = session)
     }
 }

@@ -52,6 +52,8 @@ class HotspotViewModel(private val hotspot: LocalHotspot, private val advertiser
         endSession(HotspotStatus.Idle)
     }
 
+    fun ownsActiveReservation(): Boolean = state.value.status == HotspotStatus.Active
+
     fun pause() {
         if (state.value.status == HotspotStatus.Starting || state.value.status == HotspotStatus.Active) {
             endSession(HotspotStatus.Paused)

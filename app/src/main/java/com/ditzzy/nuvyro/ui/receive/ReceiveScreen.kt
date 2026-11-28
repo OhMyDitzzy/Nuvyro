@@ -27,16 +27,21 @@ import androidx.compose.ui.unit.dp
 import com.ditzzy.nuvyro.R
 import com.ditzzy.nuvyro.data.hotspot.HotspotState
 import com.ditzzy.nuvyro.data.lan.LanStatus
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverSessionPhase
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverSessionState
 import com.ditzzy.nuvyro.ui.profile.components.ProfileAvatar
 import com.ditzzy.nuvyro.ui.send.components.SendScaffold
 
 @Composable
-fun ReceiveScreen(
+internal fun ReceiveScreen(
     status: LanStatus,
     name: String,
     photo: Bitmap?,
     onStop: () -> Unit,
     hotspot: HotspotState = HotspotState(),
+    receiverSession: ReceiverSessionState = ReceiverSessionState(ReceiverSessionPhase.Starting),
+    showReceiverSession: Boolean = true,
+    onRetryReceiverSession: () -> Unit = {},
     actions: @Composable () -> Unit = {}
 ) {
     val availability = receiveAvailability(status, hotspot.status)
@@ -60,11 +65,12 @@ fun ReceiveScreen(
                 Text(name, style = MaterialTheme.typography.headlineSmall)
                 if (availability.starting) CircularProgressIndicator()
                 Column(
-                    modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = stringResource(availability.title),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                         style = MaterialTheme.typography.titleLarge
                     )
                     Text(
@@ -72,6 +78,7 @@ fun ReceiveScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (showReceiverSession) ReceiverPairingSection(receiverSession, onRetryReceiverSession)
                     actions()
                     Text(
                         text = stringResource(R.string.receive_transfer_unavailable),

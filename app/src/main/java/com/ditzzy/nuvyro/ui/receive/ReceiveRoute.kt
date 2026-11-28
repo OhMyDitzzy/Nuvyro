@@ -31,11 +31,22 @@ fun ReceiveRoute(state: LanState, name: String, photo: Bitmap?, lanViewModel: La
     val factory = remember(context.applicationContext) { HotspotViewModelFactory(context) }
     val hotspotViewModel: HotspotViewModel = viewModel(factory = factory)
     val hotspot by hotspotViewModel.state.collectAsStateWithLifecycle()
+    val receiverFactory = remember(context.applicationContext) { ReceiverSessionViewModelFactory(context) }
+    val receiverViewModel: ReceiverSessionViewModel = viewModel(factory = receiverFactory)
+    val receiverState by receiverViewModel.state.collectAsStateWithLifecycle()
     val hosting = hotspot.status == HotspotStatus.Starting || hotspot.status == HotspotStatus.Active
     val permission = rememberLanPermissionState()
     // The Receive session owns the hotspot; opening or closing its QR details keeps it alive.
     LifecycleResumeEffect(Unit) {
         onPauseOrDispose { hotspotViewModel.pause() }
+    }
+    LifecycleResumeEffect(hotspot.status, permission.granted) {
+        when {
+            !permission.granted || hotspot.status == HotspotStatus.Starting -> receiverViewModel.stop()
+            hotspot.status == HotspotStatus.Active -> receiverViewModel.startHotspot(hotspotViewModel::ownsActiveReservation)
+            else -> receiverViewModel.startWifi()
+        }
+        onPauseOrDispose { receiverViewModel.stop() }
     }
     LanSessionEffect(LanMode.Advertise, permission.granted, lanViewModel, enabled = !hosting)
     if (showConnectionGuide) {
@@ -43,11 +54,21 @@ fun ReceiveRoute(state: LanState, name: String, photo: Bitmap?, lanViewModel: La
         return
     }
     val stopReceiving = {
+        receiverViewModel.stop()
         hotspotViewModel.stop()
         lanViewModel.closeReceive()
     }
     BackHandler(onBack = stopReceiving)
-    ReceiveScreen(state.status, name, photo, onStop = stopReceiving, hotspot = hotspot) {
+    ReceiveScreen(
+        status = state.status,
+        name = name,
+        photo = photo,
+        onStop = stopReceiving,
+        hotspot = hotspot,
+        receiverSession = receiverState,
+        showReceiverSession = permission.granted && hotspot.status != HotspotStatus.Starting,
+        onRetryReceiverSession = receiverViewModel::restart
+    ) {
         if (!hosting) LanActions(state.status, permission, lanViewModel::retry)
         if (hotspot.status == HotspotStatus.Idle) {
             ConnectionGuideEntry(receiving = true, onClick = { showConnectionGuide = true })

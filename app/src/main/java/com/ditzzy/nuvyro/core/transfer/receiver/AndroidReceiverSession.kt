@@ -24,20 +24,20 @@ import kotlinx.coroutines.withContext
 internal class AndroidReceiverSession private constructor(
     private val monitor: AndroidReceiverRouteMonitor,
     private val nsd: NsdManager?
-) : AutoCloseable {
+) : ReceiverSession {
     private val used = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val running = AtomicReference<Job?>(null)
     private val coordinator = AtomicReference<ReceiverSessionCoordinator?>(null)
     private val mutableState = MutableStateFlow(ReceiverSessionState(ReceiverSessionPhase.Starting))
-    val state = mutableState.asStateFlow()
+    override val state = mutableState.asStateFlow()
 
-    suspend fun createPairingQr(): ReceiverPairingQr? = coordinator.get()?.createInvitation()
+    override suspend fun createPairingQr(): ReceiverPairingQr? = coordinator.get()?.createInvitation()
 
-    suspend fun runWifi(network: Network) = run(monitor.wifi(network), AndroidReceiverAdvertiser(nsd, network))
+    override suspend fun runWifi(network: Network) = run(monitor.wifi(network), AndroidReceiverAdvertiser(nsd, network))
 
     /** The caller retains the reservation and must revoke this callback when it is closed. */
-    suspend fun runHotspot(ownsReservation: () -> Boolean) = run(monitor.hotspot(ownsReservation), null)
+    override suspend fun runHotspot(ownsReservation: () -> Boolean) = run(monitor.hotspot(ownsReservation), null)
 
     private suspend fun run(routes: Flow<ReceiverRouteSnapshot?>, advertiser: ReceiverAdvertiser?) = withContext(Dispatchers.IO) {
         check(used.compareAndSet(false, true))
