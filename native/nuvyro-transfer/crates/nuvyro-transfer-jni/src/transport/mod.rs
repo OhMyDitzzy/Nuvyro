@@ -14,6 +14,8 @@ mod tests;
 
 pub(crate) use attempt::{ConnectAttempt, ConnectCancellation, ConnectionContext};
 pub(crate) use endpoint::NumericEndpoint;
+#[cfg(target_os = "android")]
+pub(crate) use receiver::receiver_runtime;
 pub(crate) use receiver::{
     AcceptOutcome, AcceptedReceiver, ListenerError, ReceiverListener, ReceiverRoute, ReceiverRoutes,
 };

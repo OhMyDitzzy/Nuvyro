@@ -8,6 +8,7 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
 use super::listener::ListenerIo;
 use super::{AcceptOutcome, AcceptedReceiver, ListenerError, ReceiverListener, ReceiverRoutes};
+use crate::engine::receiver_worker::{ReceiverPairer, ReceiverRuntime, WorkerError};
 use crate::pairing::ReceiverIdentity;
 use crate::transport::ConnectCancellation;
 use crate::transport::android::AndroidTlsIo;
@@ -40,6 +41,119 @@ pub(crate) fn pair_accepted_receiver(
     current: impl FnMut() -> Option<ReceiverRoutes>,
 ) -> Result<PairedIncoming<Socket>, IncomingPairError> {
     accepted.pair_with(&AndroidTlsIo, current)
+}
+
+pub(crate) fn receiver_runtime(
+    identity: Arc<ReceiverIdentity>,
+    validity: Arc<crate::engine::receiver_worker::SessionValidity>,
+    cancellation: ConnectCancellation,
+) -> Result<impl ReceiverRuntime, WorkerError> {
+    if cancellation.is_cancelled() {
+        return Err(WorkerError::ListenerStopped);
+    }
+    let routes = validity.current_routes().ok_or(WorkerError::StartFailed)?;
+    let bound_route_generation = routes.context().route_generation();
+    let current_validity = Arc::clone(&validity);
+    let listener = open_receiver_listener(identity, routes, cancellation, move || {
+        current_validity.current_routes()
+    })
+    .map_err(|_| WorkerError::StartFailed)?;
+    Ok(AndroidReceiverRuntime {
+        listener,
+        validity,
+        bound_route_generation,
+    })
+}
+
+struct AndroidReceiverRuntime {
+    listener: ReceiverListener<Socket>,
+    validity: Arc<crate::engine::receiver_worker::SessionValidity>,
+    bound_route_generation: u64,
+}
+
+#[derive(Clone)]
+struct AndroidReceiverPairer {
+    validity: Arc<crate::engine::receiver_worker::SessionValidity>,
+}
+
+struct RouteAccepted {
+    accepted: AcceptedReceiver<Socket>,
+    route_generation: u64,
+}
+
+impl std::fmt::Debug for RouteAccepted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RouteAccepted")
+            .finish_non_exhaustive()
+    }
+}
+
+impl ReceiverRuntime for AndroidReceiverRuntime {
+    type Accepted = RouteAccepted;
+    type Paired = PairedIncoming<Socket>;
+    type Pairer = AndroidReceiverPairer;
+
+    fn accept(
+        &mut self,
+        cancellation: &ConnectCancellation,
+    ) -> Result<Option<Self::Accepted>, WorkerError> {
+        let current_validity = Arc::clone(&self.validity);
+        match accept_receiver(&mut self.listener, move || {
+            current_validity.current_routes()
+        })
+        .map_err(|_| WorkerError::ListenerStopped)?
+        {
+            AcceptOutcome::Accepted(accepted) => Ok(Some(RouteAccepted {
+                route_generation: accepted.context().route_generation(),
+                accepted,
+            })),
+            AcceptOutcome::Pending | AcceptOutcome::Rejected(_) => {
+                if cancellation.is_cancelled() {
+                    Err(WorkerError::ListenerStopped)
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+    }
+
+    fn pairer(&self) -> Self::Pairer {
+        AndroidReceiverPairer {
+            validity: Arc::clone(&self.validity),
+        }
+    }
+
+    fn bound_route_generation(&self) -> u64 {
+        self.bound_route_generation
+    }
+
+    fn close(&mut self) {
+        self.listener.close();
+    }
+}
+
+impl ReceiverPairer<RouteAccepted, PairedIncoming<Socket>> for AndroidReceiverPairer {
+    fn pair(
+        &self,
+        accepted: RouteAccepted,
+        cancellation: &ConnectCancellation,
+    ) -> Option<(u64, PairedIncoming<Socket>)> {
+        if cancellation.is_cancelled() {
+            return None;
+        }
+        let route_generation = accepted.route_generation;
+        let current_validity = Arc::clone(&self.validity);
+        pair_accepted_receiver(accepted.accepted, move || {
+            if cancellation.is_cancelled() {
+                None
+            } else {
+                current_validity.current_routes()
+            }
+        })
+        .ok()
+        .map(|paired| (route_generation, paired))
+    }
 }
 
 struct AndroidListenerIo;

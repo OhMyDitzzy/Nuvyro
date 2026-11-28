@@ -15,7 +15,9 @@ mod tests;
 pub(in crate::transport) use admission::PairedPermit;
 pub(crate) use admission::ReceiverAdmission;
 #[cfg(target_os = "android")]
-pub(crate) use android::{accept_receiver, open_receiver_listener, pair_accepted_receiver};
+pub(crate) use android::{
+    accept_receiver, open_receiver_listener, pair_accepted_receiver, receiver_runtime,
+};
 pub(crate) use context::ReceiverContext;
 pub(crate) use listener::{
     AcceptOutcome, AcceptedReceiver, ListenerError, ReceiverListener, RejectReason,

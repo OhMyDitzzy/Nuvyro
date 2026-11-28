@@ -277,6 +277,10 @@ pub(crate) struct AcceptedReceiver<S> {
 }
 
 impl<S> AcceptedReceiver<S> {
+    pub(crate) fn context(&self) -> super::ReceiverContext {
+        self.routes.context()
+    }
+
     pub(in crate::transport) fn pair_with<O: ReceiverTlsIo<S>>(
         self,
         io: &O,

@@ -34,6 +34,14 @@ impl ReceiverContext {
     pub(crate) const fn session(self) -> Id {
         self.session
     }
+
+    pub(crate) const fn native_generation(self) -> u64 {
+        self.native_generation.get()
+    }
+
+    pub(crate) const fn route_generation(self) -> u64 {
+        self.route_generation.get()
+    }
 }
 
 impl std::fmt::Debug for ReceiverContext {

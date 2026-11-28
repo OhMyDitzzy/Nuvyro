@@ -10,10 +10,17 @@ use crate::contract::{
 };
 use crate::events;
 
+#[cfg(any(target_os = "android", test))]
+pub(crate) mod receiver_worker;
+
 #[derive(Clone)]
 struct Session {
     id: String,
     generation: u64,
+    #[cfg(any(target_os = "android", test))]
+    receiver_identity: std::sync::Arc<crate::pairing::ReceiverIdentity>,
+    #[cfg(any(target_os = "android", test))]
+    receiver_validity: std::sync::Arc<receiver_worker::SessionValidity>,
 }
 
 struct State {
@@ -28,6 +35,8 @@ pub(crate) struct Engine {
     state: Mutex<State>,
     changed: Condvar,
     polling: AtomicBool,
+    #[cfg(any(target_os = "android", test))]
+    receiver_worker: Mutex<Option<receiver_worker::ReceiverWorkerHandle>>,
 }
 
 struct PollGuard<'a>(&'a AtomicBool);
@@ -71,11 +80,32 @@ impl Engine {
             }),
             changed: Condvar::new(),
             polling: AtomicBool::new(false),
+            #[cfg(any(target_os = "android", test))]
+            receiver_worker: Mutex::new(None),
         }
     }
 
     pub(crate) fn submit(&self, command: Command) -> Result<(), NativeStatus> {
-        // Generate outside the state lock so shutdown never waits for OS entropy.
+        // Generate the session identity before taking the state lock.
+        #[cfg(any(target_os = "android", test))]
+        let new_identity = if matches!(&command, Command::Start { .. }) {
+            Some(std::sync::Arc::new(
+                crate::pairing::ReceiverIdentity::create()
+                    .map_err(|_| NativeStatus::InternalFailure)?,
+            ))
+        } else {
+            None
+        };
+        #[cfg(any(target_os = "android", test))]
+        let new_id = new_identity.as_ref().map(|identity| {
+            identity
+                .session()
+                .as_bytes()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        });
+        #[cfg(not(any(target_os = "android", test)))]
         let new_id = if matches!(&command, Command::Start { .. }) {
             let mut bytes = [0u8; 16];
             getrandom::fill(&mut bytes).map_err(|_| NativeStatus::InternalFailure)?;
@@ -95,6 +125,8 @@ impl Engine {
             .state
             .lock()
             .map_err(|_| NativeStatus::InternalFailure)?;
+        #[cfg(any(target_os = "android", test))]
+        let mut stopped_worker = None;
         if state.closed {
             return Err(NativeStatus::InvalidHandle);
         }
@@ -112,9 +144,22 @@ impl Engine {
                     .checked_add(1)
                     .filter(|v| *v <= i64::MAX as u64)
                     .ok_or(NativeStatus::ResourceLimit)?;
-                let session = Session {
-                    id: new_id.ok_or(NativeStatus::InternalFailure)?,
+                let id = new_id.ok_or(NativeStatus::InternalFailure)?;
+                #[cfg(any(target_os = "android", test))]
+                let receiver_identity = new_identity.ok_or(NativeStatus::InternalFailure)?;
+                #[cfg(any(target_os = "android", test))]
+                let receiver_validity = std::sync::Arc::new(receiver_worker::SessionValidity::new(
                     generation,
+                    &id,
+                    receiver_identity.session(),
+                ));
+                let session = Session {
+                    id,
+                    generation,
+                    #[cfg(any(target_os = "android", test))]
+                    receiver_identity,
+                    #[cfg(any(target_os = "android", test))]
+                    receiver_validity,
                 };
                 state.emit("SessionStarted", &request_id, &session)?;
                 state.generation = generation;
@@ -130,11 +175,146 @@ impl Engine {
                     return Err(NativeStatus::InvalidState);
                 }
                 state.emit("SessionClosed", &request_id, &session)?;
+                #[cfg(any(target_os = "android", test))]
+                {
+                    session.receiver_validity.invalidate();
+                    session.receiver_identity.close();
+                }
                 state.session = None;
                 state.generation = state.generation.saturating_add(1).min(i64::MAX as u64);
+                #[cfg(any(target_os = "android", test))]
+                {
+                    stopped_worker = self
+                        .receiver_worker
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .take();
+                }
             }
         }
         self.changed.notify_all();
+        drop(state);
+        #[cfg(any(target_os = "android", test))]
+        if let Some(worker) = stopped_worker {
+            worker.stop();
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "android")]
+    pub(crate) fn attach_receiver(
+        &self,
+        generation: u64,
+        session_id: &str,
+        routes: crate::transport::ReceiverRoutes,
+    ) -> Result<(), NativeStatus> {
+        let (identity, validity) = {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| NativeStatus::InternalFailure)?;
+            if state.closed {
+                return Err(NativeStatus::InvalidHandle);
+            }
+            let session = state.session.as_ref().ok_or(NativeStatus::InvalidState)?;
+            if session.generation != generation || session.id != session_id {
+                return Err(NativeStatus::InvalidState);
+            }
+            if routes.context().native_generation() != generation
+                || routes.context().session() != session.receiver_identity.session()
+            {
+                return Err(NativeStatus::InvalidState);
+            }
+            session
+                .receiver_validity
+                .set_initial_routes(routes)
+                .map_err(|_| NativeStatus::InvalidState)?;
+            (
+                std::sync::Arc::clone(&session.receiver_identity),
+                std::sync::Arc::clone(&session.receiver_validity),
+            )
+        };
+        self.attach_receiver_with(generation, session_id, move |cancellation| {
+            crate::transport::receiver_runtime(identity, validity, cancellation)
+        })
+    }
+
+    #[cfg(target_os = "android")]
+    pub(crate) fn update_receiver_routes(
+        &self,
+        generation: u64,
+        session_id: &str,
+        routes: crate::transport::ReceiverRoutes,
+    ) -> Result<(), NativeStatus> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| NativeStatus::InternalFailure)?;
+        if state.closed {
+            return Err(NativeStatus::InvalidHandle);
+        }
+        let session = state.session.as_ref().ok_or(NativeStatus::InvalidState)?;
+        if session.generation != generation
+            || session.id != session_id
+            || routes.context().native_generation() != generation
+            || routes.context().session() != session.receiver_identity.session()
+        {
+            return Err(NativeStatus::InvalidState);
+        }
+        let worker = self
+            .receiver_worker
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if worker.is_none() {
+            return Err(NativeStatus::InvalidState);
+        }
+        session
+            .receiver_validity
+            .update_routes(routes)
+            .map_err(|_| NativeStatus::InvalidState)
+    }
+
+    #[cfg(any(target_os = "android", test))]
+    fn attach_receiver_with<R, F>(
+        &self,
+        generation: u64,
+        session_id: &str,
+        factory: F,
+    ) -> Result<(), NativeStatus>
+    where
+        R: receiver_worker::ReceiverRuntime,
+        F: FnOnce(crate::transport::ConnectCancellation) -> Result<R, receiver_worker::WorkerError>
+            + Send
+            + 'static,
+    {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| NativeStatus::InternalFailure)?;
+        if state.closed {
+            return Err(NativeStatus::InvalidHandle);
+        }
+        let session = state.session.as_ref().ok_or(NativeStatus::InvalidState)?;
+        if session.generation != generation
+            || session.id != session_id
+            || !session.receiver_validity.matches(generation, session_id)
+        {
+            return Err(NativeStatus::InvalidState);
+        }
+        let mut worker = self
+            .receiver_worker
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if worker.is_some() || !session.receiver_validity.is_active() {
+            return Err(NativeStatus::InvalidState);
+        }
+        *worker = Some(
+            receiver_worker::ReceiverWorkerHandle::spawn(
+                std::sync::Arc::clone(&session.receiver_validity),
+                factory,
+            )
+            .map_err(|_| NativeStatus::ResourceLimit)?,
+        );
         Ok(())
     }
 
@@ -192,15 +372,33 @@ impl Engine {
     pub(crate) fn close(&self) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         state.closed = true;
+        #[cfg(any(target_os = "android", test))]
+        if let Some(session) = state.session.as_ref() {
+            session.receiver_validity.invalidate();
+            session.receiver_identity.close();
+        }
         state.session = None;
         state.events.clear();
         self.changed.notify_all();
+        drop(state);
+        #[cfg(any(target_os = "android", test))]
+        if let Some(worker) = self
+            .receiver_worker
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take()
+        {
+            worker.stop();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::receiver_worker::{ReceiverPairer, ReceiverRuntime, WorkerError};
+    use crate::transport::ConnectCancellation;
+    use std::sync::atomic::{AtomicBool, Ordering};
     fn start(engine: &Engine) {
         engine
             .submit(Command::Start {
@@ -262,6 +460,22 @@ mod tests {
             Err(NativeStatus::InvalidState)
         );
     }
+
+    #[test]
+    fn engine_session_id_is_the_receiver_identity_session_id() {
+        let engine = Engine::new();
+        start(&engine);
+        let session = engine.state.lock().unwrap().session.clone().unwrap();
+        let secure_id = session
+            .receiver_identity
+            .session()
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        assert_eq!(session.id, secure_id);
+    }
+
     #[test]
     fn shutdown_invalidates_concurrent_poll() {
         let engine = std::sync::Arc::new(Engine::new());
@@ -275,5 +489,90 @@ mod tests {
         barrier.wait();
         engine.close();
         assert_eq!(thread.join().unwrap(), Err(NativeStatus::InvalidHandle));
+    }
+
+    struct PairControl {
+        started: AtomicBool,
+        release: AtomicBool,
+        closed: AtomicBool,
+    }
+
+    struct PairRuntime(std::sync::Arc<PairControl>);
+
+    #[derive(Clone)]
+    struct LatePairer(std::sync::Arc<PairControl>);
+
+    impl ReceiverRuntime for PairRuntime {
+        type Accepted = ();
+        type Paired = ();
+        type Pairer = LatePairer;
+
+        fn accept(
+            &mut self,
+            cancellation: &ConnectCancellation,
+        ) -> Result<Option<Self::Accepted>, WorkerError> {
+            if cancellation.is_cancelled() {
+                return Err(WorkerError::ListenerStopped);
+            }
+            std::thread::sleep(Duration::from_millis(2));
+            Ok(Some(()))
+        }
+
+        fn pairer(&self) -> Self::Pairer {
+            LatePairer(std::sync::Arc::clone(&self.0))
+        }
+
+        fn close(&mut self) {
+            self.0.closed.store(true, Ordering::Release);
+        }
+    }
+
+    impl ReceiverPairer<(), ()> for LatePairer {
+        fn pair(&self, _: (), _: &ConnectCancellation) -> Option<(u64, ())> {
+            self.0.started.store(true, Ordering::Release);
+            while !self.0.release.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            Some((0, ()))
+        }
+    }
+
+    #[test]
+    fn closing_session_cancels_listener_joins_workers_and_rejects_late_pairing() {
+        let engine = Engine::new();
+        start(&engine);
+        let session = engine.state.lock().unwrap().session.clone().unwrap();
+        let validity = std::sync::Arc::clone(&session.receiver_validity);
+        let control = std::sync::Arc::new(PairControl {
+            started: AtomicBool::new(false),
+            release: AtomicBool::new(false),
+            closed: AtomicBool::new(false),
+        });
+        engine
+            .attach_receiver_with(session.generation, &session.id, {
+                let control = std::sync::Arc::clone(&control);
+                move |_| Ok::<_, WorkerError>(PairRuntime(control))
+            })
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !control.started.load(Ordering::Acquire) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(control.started.load(Ordering::Acquire));
+
+        close_session(&engine);
+        control.release.store(true, Ordering::Release);
+        assert!(validity.wait_finished(Duration::from_secs(2)));
+        assert!(!validity.paired());
+        assert!(!validity.is_active());
+        assert!(control.closed.load(Ordering::Acquire));
+
+        let batch = engine
+            .poll_with(4, 0, |events| Ok(events.to_vec()))
+            .unwrap();
+        let events: Vec<serde_json::Value> = serde_json::from_slice(&batch).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["kind"], "SessionStarted");
+        assert_eq!(events[1]["kind"], "SessionClosed");
     }
 }
