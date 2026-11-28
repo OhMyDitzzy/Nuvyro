@@ -16,6 +16,7 @@ data class SendUiState(
     val picking: Boolean = false,
     val pickerUnavailable: Boolean = false,
     val unavailableCount: Int = 0,
+    val pairingQrScanned: Boolean = false,
     val receiverDiscovery: ReceiverDiscoveryUiState = ReceiverDiscoveryUiState()
 ) {
     val busy: Boolean get() = loading || picking

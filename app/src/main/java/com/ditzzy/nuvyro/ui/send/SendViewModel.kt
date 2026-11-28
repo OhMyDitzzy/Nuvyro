@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ditzzy.nuvyro.core.storage.OutgoingFileAccess
+import com.ditzzy.nuvyro.core.transfer.pairing.ScannedPairingQr
 import com.ditzzy.nuvyro.data.send.FileSelection
 import com.ditzzy.nuvyro.data.send.OutgoingFile
 import com.ditzzy.nuvyro.ui.send.receiver.ReceiverDiscoveryUiState
@@ -32,12 +33,14 @@ class SendViewModel(
     val state = mutableState.asStateFlow()
     private val selectionMutex = Mutex()
     private var pendingReads = 0
+    private var scannedPairingQr: ScannedPairingQr? = null
 
     init {
         if (restoredUris.isNotEmpty()) readFiles(restoredUris, restoring = true)
     }
 
     fun open() {
+        clearScannedPairingQr()
         savedStateHandle["active"] = true
         mutableState.update { it.copy(active = true) }
     }
@@ -52,6 +55,7 @@ class SendViewModel(
     }
 
     fun showFiles() {
+        clearScannedPairingQr()
         savedStateHandle["step"] = SendStep.Files.name
         mutableState.update { it.copy(step = SendStep.Files) }
     }
@@ -59,6 +63,7 @@ class SendViewModel(
     fun chooseReceiver() {
         val current = state.value
         if (current.busy || current.files.isEmpty()) return
+        clearScannedPairingQr()
         savedStateHandle["step"] = SendStep.Receiver.name
         mutableState.update { it.copy(step = SendStep.Receiver) }
     }
@@ -78,6 +83,25 @@ class SendViewModel(
                 }
             ))
         }
+    }
+
+    fun pairingQrScanned(scanned: ScannedPairingQr) {
+        scannedPairingQr?.close()
+        scannedPairingQr = scanned
+        mutableState.update { it.copy(pairingQrScanned = true) }
+    }
+
+    fun clearScannedPairingQr() {
+        scannedPairingQr?.close()
+        scannedPairingQr = null
+        mutableState.update { it.copy(pairingQrScanned = false) }
+    }
+
+    internal fun takeScannedPairingQr(): ScannedPairingQr? {
+        val scanned = scannedPairingQr ?: return null
+        scannedPairingQr = null
+        mutableState.update { it.copy(pairingQrScanned = false) }
+        return scanned
     }
 
     fun beginPicking(): Boolean {
@@ -129,5 +153,10 @@ class SendViewModel(
 
     private fun rememberFiles(files: List<OutgoingFile>) {
         savedStateHandle["file_uris"] = ArrayList(files.map { it.uri.toString() })
+    }
+
+    override fun onCleared() {
+        clearScannedPairingQr()
+        super.onCleared()
     }
 }
