@@ -163,8 +163,8 @@ dropped as soon as its authentication frame is encoded. The receiver reports a
 `PairContext` only after PairResult is flushed; the sender reports the matching
 context after receiving it. This context contains session and pair IDs only.
 Transfer IDs, manifest consent, file access, and transfer readiness belong to
-subsequent operations. These private components have no engine/listener/UI
-activation or general application I/O entry point.
+subsequent operations. These private components expose no general application I/O
+entry point. The receiver worker owns incoming pairing on accepted TLS sockets.
 
 ## Incoming pairing operation
 
@@ -195,8 +195,8 @@ consumes its invitation and fails closed. The TLS attempt limit is unchanged.
 the PairContext and bounded claimed display name. Its Debug omits that name.
 The name is a peer claim, not a permanent verified identity. Pairing grants no
 manifest consent, file capability, or transfer readiness; later operations must
-continue lifecycle and protocol-deadline checks. No engine or UI invokes this
-operation yet.
+continue lifecycle and protocol-deadline checks. The native receive-session
+worker invokes this operation and retains at most one paired connection.
 
 ## Internal receiver listener and routing
 
@@ -217,8 +217,12 @@ Hotspot snapshots exclude client interfaces and addresses, including uplinks and
 VPNs, and require exactly one eligible unmanaged interface. Incomplete reads,
 ambiguous interfaces, missing reservation ownership, and oversized snapshots
 fail closed. These snapshots are routing policy, not proof of physical ingress
-or peer identity. The coordinator must refresh them and invalidate stale work;
-the Kotlin snapshot reader is not connected to a native engine or UI yet.
+or peer identity. `AndroidReceiverSession` explicitly opens an engine and supplies
+snapshots through the bounded JNI command channel. Its coordinator matches native
+generation, SID and route generation, acknowledges owned events and waits for
+`ReceiverListening`. Network callbacks and periodic refresh invalidate stale work.
+Route drift, lost permission/reservation, cancellation or native failure stops the
+session and requires a new identity; the UI does not start this owner yet.
 
 Each `accept_receiver` call performs at most one readiness poll of at most 50 ms
 and one nonblocking accept. The accepted socket must retain close-on-exec and

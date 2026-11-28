@@ -242,6 +242,19 @@ impl ReceiverWorkerHandle {
         R: ReceiverRuntime,
         F: FnOnce(ConnectCancellation) -> Result<R, WorkerError> + Send + 'static,
     {
+        Self::spawn_observed(validity, factory, |_| {})
+    }
+
+    pub(crate) fn spawn_observed<R, F, O>(
+        validity: Arc<SessionValidity>,
+        factory: F,
+        observer: O,
+    ) -> Result<Self, WorkerError>
+    where
+        R: ReceiverRuntime,
+        F: FnOnce(ConnectCancellation) -> Result<R, WorkerError> + Send + 'static,
+        O: Fn(bool) + Send + 'static,
+    {
         join_queue().ok_or(WorkerError::StartFailed)?;
         let cancellation = ConnectCancellation::new();
         let worker_cancellation = cancellation.clone();
@@ -249,7 +262,17 @@ impl ReceiverWorkerHandle {
         let worker = thread::Builder::new()
             .name("nuvyro-receiver-session".to_owned())
             .spawn(move || {
-                run::<R, F>(factory, worker_cancellation, worker_validity);
+                let mut observer = observer;
+                run(
+                    |cancellation| {
+                        let runtime = factory(cancellation)?;
+                        observer(true);
+                        Ok(runtime)
+                    },
+                    worker_cancellation,
+                    worker_validity,
+                );
+                observer(false);
             })
             .map_err(|_| WorkerError::StartFailed)?;
         Ok(Self {

@@ -11,13 +11,25 @@ bounded poller. `startReceiveSession` currently creates only a local session;
 its SessionStarted data is `{"transport_ready":false}`. It opens no socket,
 advertises no service, and must not make Receive appear ready. `closeSession`
 invalidates that session and emits SessionClosed with the closed generation and
-the same `transport_ready:false` field. Other transfer/pairing commands return
+the same `transport_ready:false` field. File and invitation/pairing commands return
 InvalidState; no fake invitation, pairing, receipt, or completed file is emitted.
 
-Current short lifecycle commands are serialized under engine state and enqueue
-events immediately; there is no background command worker/runtime yet. The
-32-command/progress/provider-worker limits below constrain future implementations.
-The event queue reserves room for the matching close event before accepting a local session.
+Lifecycle commands are serialized under engine state. `attachReceiver` starts an
+owned listener worker after strict route validation; its Accepted status does not
+confirm that binding succeeded. `ReceiverListening` is emitted only after all
+bindings open, and `ReceiverStopped` reports startup failure or worker shutdown.
+Both carry the current session/generation, `route_generation` as a positive decimal
+string, and `transport_ready:false`. Neither grants file access or pairing trust.
+Worker callbacks from a closed/replaced session are discarded. Attach reserves
+queue capacity for listener events and the matching session close.
+
+`updateReceiverRoutes` requires the same native generation/SID and a newer route
+generation. Drift revokes the listener; restart requires a new session identity.
+Kotlin owns one engine/event consumer per receive coordinator, watches the selected
+Wi-Fi or active hotspot reservation, rejects stale events, and destroys the engine
+on route loss/change, cancellation, startup timeout, or native failure. Native
+shutdown requests cancellation and delegates worker joins away from the JNI caller.
+
 The two FD entry points validate arguments then return InvalidState without
 inspecting, duplicating, or taking ownership of a caller FD. Actual dup/I/O and
 associated failure tests remain gated on an approved transfer implementation.
@@ -75,7 +87,8 @@ Each command has exactly these keys:
 ```
 
 All `u64` quantities are canonical decimal strings (no signs, leading zeros, or
-floating point), constrained to signed Long on Android. IDs are 32 lowercase hex
+floating point). Generations are constrained to signed Long on Android; opaque
+Network handles preserve unsigned 64-bit values. IDs are 32 lowercase hex
 characters; session/transfer may be zero only when that command has no such
 object yet. Reject duplicate/unknown keys, unexpected data fields, non-UTF-8,
 oversize, null required values, nesting beyond six containers, or unknown kinds.
@@ -84,6 +97,7 @@ Commands/events and their individual text fields obey the wire metadata limits.
 | Kind | Required data / prerequisite |
 | --- | --- |
 | startReceiveSession | Empty; no active session; creates generation/session ID |
+| attachReceiver / updateReceiverRoutes | Current session; immutable routing snapshot described below |
 | createInvitation | Empty; current receiving session; returns sensitive QR event |
 | connectAndPair | qr_payload (bounded pairing text), network_handle (opaque decimal u64 string), endpoints (at most two) |
 | offerTransfer | files (1–128) with file_id, name, mime, size; paired/current transfer ID |
@@ -91,6 +105,18 @@ Commands/events and their individual text fields obey the wire metadata limits.
 | confirmDestinationCommit | file_id, size, digest, receipt_id, actual_name; only after Android readback/journal succeeds |
 | cancelTransfer | reason (wire Cancel enum); current transfer |
 | closeSession | Empty; current generation |
+
+Receiver routing data has exactly `route_generation`, `network_handle`,
+`interface_index`, `locals`, `client_addresses`, and `client_interfaces`.
+Network handles use unsigned decimal strings preserving all 64 bits; `"0"` means
+an owned hotspot, with no fabricated Android Network. Wi-Fi handles are nonzero
+and require empty client exclusions. Interface indices are positive signed Ints.
+There are 1–16 locals, at most 128 client addresses and 32 client interfaces.
+Each local has exactly `address` (8/32 lowercase hex digits), `scope_id`
+(canonical decimal string), and `prefix_length` (integer). IPv6 link-local scope
+must match the interface; IPv4/global IPv6 scope is zero. Client addresses use
+8/32 lowercase hex digits. Native policy revalidates numeric routes before binding.
+Snapshots are routing input, not physical ingress or peer identity proofs.
 
 An endpoint contains `family` (4 or 6), `address` (8 or 32 lowercase hex digits),
 `scope_id` (decimal string), and `port` (47739). IPv4/global IPv6 scope is zero;

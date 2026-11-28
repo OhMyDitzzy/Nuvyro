@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::command::Command;
@@ -32,8 +32,8 @@ struct State {
 }
 
 pub(crate) struct Engine {
-    state: Mutex<State>,
-    changed: Condvar,
+    state: Arc<Mutex<State>>,
+    changed: Arc<Condvar>,
     polling: AtomicBool,
     #[cfg(any(target_os = "android", test))]
     receiver_worker: Mutex<Option<receiver_worker::ReceiverWorkerHandle>>,
@@ -71,14 +71,14 @@ impl State {
 impl Engine {
     pub(crate) fn new() -> Self {
         Self {
-            state: Mutex::new(State {
+            state: Arc::new(Mutex::new(State {
                 closed: false,
                 generation: 0,
                 next_event: 1,
                 session: None,
                 events: VecDeque::with_capacity(TERMINAL_EVENT_CAPACITY),
-            }),
-            changed: Condvar::new(),
+            })),
+            changed: Arc::new(Condvar::new()),
             polling: AtomicBool::new(false),
             #[cfg(any(target_os = "android", test))]
             receiver_worker: Mutex::new(None),
@@ -86,6 +86,30 @@ impl Engine {
     }
 
     pub(crate) fn submit(&self, command: Command) -> Result<(), NativeStatus> {
+        let command = match command {
+            Command::Receiver {
+                update,
+                generation,
+                session_id,
+                routes,
+            } => {
+                #[cfg(target_os = "android")]
+                {
+                    let routes = routes.routes(generation, &session_id)?;
+                    return if update {
+                        self.update_receiver_routes(generation, &session_id, routes)
+                    } else {
+                        self.attach_receiver(generation, &session_id, routes)
+                    };
+                }
+                #[cfg(not(target_os = "android"))]
+                {
+                    let _ = (update, generation, session_id, routes);
+                    return Err(NativeStatus::InvalidState);
+                }
+            }
+            command => command,
+        };
         // Generate the session identity before taking the state lock.
         #[cfg(any(target_os = "android", test))]
         let new_identity = if matches!(&command, Command::Start { .. }) {
@@ -131,6 +155,9 @@ impl Engine {
             return Err(NativeStatus::InvalidHandle);
         }
         match command {
+            Command::Receiver { .. } => {
+                unreachable!("receiver commands dispatched before lifecycle lock")
+            }
             Command::Start { request_id } => {
                 if state.session.is_some() {
                     return Err(NativeStatus::InvalidState);
@@ -308,10 +335,61 @@ impl Engine {
         if worker.is_some() || !session.receiver_validity.is_active() {
             return Err(NativeStatus::InvalidState);
         }
+        if state.events.len() + 3 > TERMINAL_EVENT_CAPACITY
+            || state.next_event.checked_add(3).is_none()
+        {
+            return Err(NativeStatus::QueueFull);
+        }
+        let events = Arc::clone(&self.state);
+        let changed = Arc::clone(&self.changed);
+        let expected = session.clone();
+        let route_generation = session
+            .receiver_validity
+            .current_routes()
+            .map_or(0, |routes| routes.context().route_generation());
         *worker = Some(
-            receiver_worker::ReceiverWorkerHandle::spawn(
+            receiver_worker::ReceiverWorkerHandle::spawn_observed(
                 std::sync::Arc::clone(&session.receiver_validity),
                 factory,
+                move |listening| {
+                    // A closed or replaced session cannot publish a late worker event.
+                    let Ok(mut state) = events.lock() else {
+                        return;
+                    };
+                    if state.closed
+                        || !state.session.as_ref().is_some_and(|current| {
+                            current.id == expected.id && current.generation == expected.generation
+                        })
+                    {
+                        return;
+                    }
+                    if listening
+                        && (!expected.receiver_validity.is_active()
+                            || expected
+                                .receiver_validity
+                                .current_routes()
+                                .map_or(0, |routes| routes.context().route_generation())
+                                != route_generation)
+                    {
+                        return;
+                    }
+                    let kind = if listening {
+                        "ReceiverListening"
+                    } else {
+                        "ReceiverStopped"
+                    };
+                    if let Ok(event) = events::receiver(
+                        kind,
+                        state.next_event,
+                        expected.generation,
+                        &expected.id,
+                        route_generation,
+                    ) {
+                        state.events.push_back(event);
+                        state.next_event += 1;
+                        changed.notify_all();
+                    }
+                },
             )
             .map_err(|_| NativeStatus::ResourceLimit)?,
         );
@@ -497,6 +575,205 @@ mod tests {
         closed: AtomicBool,
     }
 
+    #[test]
+    fn receiver_startup_failure_emits_stopped_without_listening() {
+        let engine = Engine::new();
+        start(&engine);
+        let session = engine.state.lock().unwrap().session.clone().unwrap();
+        engine
+            .attach_receiver_with::<PairRuntime, _>(session.generation, &session.id, |_| {
+                Err(WorkerError::StartFailed)
+            })
+            .unwrap();
+        assert!(
+            session
+                .receiver_validity
+                .wait_finished(Duration::from_secs(2))
+        );
+        let mut kinds = Vec::new();
+        while kinds.len() < 2 {
+            let batch = engine
+                .poll_with(4, 1000, |bytes| Ok(bytes.to_vec()))
+                .unwrap();
+            let events: Vec<serde_json::Value> = serde_json::from_slice(&batch).unwrap();
+            assert!(!events.is_empty());
+            kinds.extend(
+                events
+                    .into_iter()
+                    .map(|event| event["kind"].as_str().unwrap().to_owned()),
+            );
+        }
+        assert_eq!(kinds, ["SessionStarted", "ReceiverStopped"]);
+    }
+
+    #[test]
+    fn late_listener_startup_cannot_emit_events_into_replacement_session() {
+        let engine = Engine::new();
+        start(&engine);
+        let session = engine.state.lock().unwrap().session.clone().unwrap();
+        let (release, blocked) = std::sync::mpsc::channel();
+        let control = Arc::new(PairControl {
+            started: AtomicBool::new(false),
+            release: AtomicBool::new(true),
+            closed: AtomicBool::new(false),
+        });
+        engine
+            .attach_receiver_with(session.generation, &session.id, move |_| {
+                blocked.recv().unwrap();
+                Ok(PairRuntime(control))
+            })
+            .unwrap();
+        close_session(&engine);
+        start(&engine);
+        release.send(()).unwrap();
+        assert!(
+            session
+                .receiver_validity
+                .wait_finished(Duration::from_secs(2))
+        );
+        let batch = engine.poll_with(8, 0, |bytes| Ok(bytes.to_vec())).unwrap();
+        let events: Vec<serde_json::Value> = serde_json::from_slice(&batch).unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event["kind"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["SessionStarted", "SessionClosed", "SessionStarted"]
+        );
+    }
+
+    #[test]
+    fn reserves_worker_terminal_and_close_event_capacity_before_spawn() {
+        let engine = Engine::new();
+        for _ in 0..7 {
+            start(&engine);
+            close_session(&engine);
+        }
+        start(&engine);
+        let session = engine.state.lock().unwrap().session.clone().unwrap();
+        assert_eq!(
+            engine.attach_receiver_with::<PairRuntime, _>(
+                session.generation,
+                &session.id,
+                |_| panic!("must not spawn without event capacity")
+            ),
+            Err(NativeStatus::QueueFull)
+        );
+        close_session(&engine);
+        assert_eq!(
+            engine.state.lock().unwrap().events.len(),
+            TERMINAL_EVENT_CAPACITY
+        );
+    }
+
+    struct IdleRuntime {
+        route_generation: u64,
+        closed: Arc<AtomicBool>,
+    }
+
+    #[derive(Clone)]
+    struct IdlePairer;
+
+    impl ReceiverRuntime for IdleRuntime {
+        type Accepted = ();
+        type Paired = ();
+        type Pairer = IdlePairer;
+
+        fn accept(&mut self, _: &ConnectCancellation) -> Result<Option<()>, WorkerError> {
+            std::thread::sleep(Duration::from_millis(2));
+            Ok(None)
+        }
+        fn pairer(&self) -> IdlePairer {
+            IdlePairer
+        }
+        fn bound_route_generation(&self) -> u64 {
+            self.route_generation
+        }
+        fn close(&mut self) {
+            self.closed.store(true, Ordering::Release);
+        }
+    }
+
+    impl ReceiverPairer<(), ()> for IdlePairer {
+        fn pair(&self, _: (), _: &ConnectCancellation) -> Option<(u64, ())> {
+            None
+        }
+    }
+
+    #[test]
+    fn route_change_emits_stopped_for_old_route_after_listener_close() {
+        use crate::transport::{ReceiverContext, ReceiverRoute, ReceiverRoutes};
+        let engine = Engine::new();
+        start(&engine);
+        let session = engine.state.lock().unwrap().session.clone().unwrap();
+        let old = ReceiverRoutes::wifi(
+            ReceiverContext::new(
+                session.generation,
+                1,
+                *session.receiver_identity.session().as_bytes(),
+            )
+            .unwrap(),
+            u64::MAX,
+            7,
+            &[ReceiverRoute::new(&[192, 168, 42, 1], 0, 24).unwrap()],
+        )
+        .unwrap();
+        let next = ReceiverRoutes::wifi(
+            ReceiverContext::new(
+                session.generation,
+                2,
+                *session.receiver_identity.session().as_bytes(),
+            )
+            .unwrap(),
+            u64::MAX,
+            7,
+            &[ReceiverRoute::new(&[192, 168, 42, 2], 0, 24).unwrap()],
+        )
+        .unwrap();
+        session.receiver_validity.set_initial_routes(old).unwrap();
+        let closed = Arc::new(AtomicBool::new(false));
+        engine
+            .attach_receiver_with::<IdleRuntime, _>(session.generation, &session.id, {
+                let closed = Arc::clone(&closed);
+                move |_| {
+                    Ok(IdleRuntime {
+                        route_generation: 1,
+                        closed,
+                    })
+                }
+            })
+            .unwrap();
+        let mut kinds = Vec::new();
+        while !kinds.iter().any(|kind| kind == "ReceiverListening") {
+            let batch = engine
+                .poll_with(4, 1000, |bytes| Ok(bytes.to_vec()))
+                .unwrap();
+            let events: Vec<serde_json::Value> = serde_json::from_slice(&batch).unwrap();
+            kinds.extend(
+                events
+                    .into_iter()
+                    .map(|event| event["kind"].as_str().unwrap().to_owned()),
+            );
+        }
+        engine
+            .update_receiver_routes(session.generation, &session.id, next)
+            .unwrap();
+        assert!(
+            session
+                .receiver_validity
+                .wait_finished(Duration::from_secs(2))
+        );
+        assert!(closed.load(Ordering::Acquire));
+        let batch = engine
+            .poll_with(4, 1000, |bytes| Ok(bytes.to_vec()))
+            .unwrap();
+        let events: Vec<serde_json::Value> = serde_json::from_slice(&batch).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["kind"], "ReceiverStopped");
+        assert_eq!(events[0]["data"]["route_generation"], "1");
+        assert_eq!(events[0]["data"]["transport_ready"], false);
+    }
+
     struct PairRuntime(std::sync::Arc<PairControl>);
 
     #[derive(Clone)]
@@ -571,8 +848,9 @@ mod tests {
             .poll_with(4, 0, |events| Ok(events.to_vec()))
             .unwrap();
         let events: Vec<serde_json::Value> = serde_json::from_slice(&batch).unwrap();
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 3);
         assert_eq!(events[0]["kind"], "SessionStarted");
-        assert_eq!(events[1]["kind"], "SessionClosed");
+        assert_eq!(events[1]["kind"], "ReceiverListening");
+        assert_eq!(events[2]["kind"], "SessionClosed");
     }
 }

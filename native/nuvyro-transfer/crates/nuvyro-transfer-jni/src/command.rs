@@ -26,6 +26,12 @@ pub(crate) enum Command {
     Start {
         request_id: String,
     },
+    Receiver {
+        update: bool,
+        generation: u64,
+        session_id: String,
+        routes: crate::receiver_command::ReceiverRouteInput,
+    },
     Close {
         request_id: String,
         generation: u64,
@@ -101,7 +107,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Command, NativeStatus> {
         return Err(NativeStatus::InvalidArgument);
     }
     match value.kind.as_str() {
-        "startReceiveSession" | "closeSession" => {}
+        "startReceiveSession" | "closeSession" | "attachReceiver" | "updateReceiverRoutes" => {}
         "createInvitation"
         | "connectAndPair"
         | "offerTransfer"
@@ -110,6 +116,23 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Command, NativeStatus> {
         | "confirmDestinationCommit"
         | "cancelTransfer" => return Err(NativeStatus::InvalidState),
         _ => return Err(NativeStatus::InvalidArgument),
+    }
+    if matches!(
+        value.kind.as_str(),
+        "attachReceiver" | "updateReceiverRoutes"
+    ) {
+        if generation == 0 || value.session_id == ZERO_ID || value.transfer_id != ZERO_ID {
+            return Err(NativeStatus::InvalidState);
+        }
+        let routes: crate::receiver_command::ReceiverRouteInput =
+            serde_json::from_str(value.data.get()).map_err(|_| NativeStatus::InvalidArgument)?;
+        routes.validate()?;
+        return Ok(Command::Receiver {
+            update: value.kind == "updateReceiverRoutes",
+            generation,
+            session_id: value.session_id,
+            routes,
+        });
     }
     let _: EmptyData =
         serde_json::from_str(value.data.get()).map_err(|_| NativeStatus::InvalidArgument)?;

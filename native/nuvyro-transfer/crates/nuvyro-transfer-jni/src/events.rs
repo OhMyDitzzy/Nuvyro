@@ -38,3 +38,17 @@ pub(crate) fn lifecycle(
     }
     Ok(encoded)
 }
+
+pub(crate) fn receiver(
+    kind: &str,
+    event_id: u64,
+    generation: u64,
+    session: &str,
+    route_generation: u64,
+) -> Result<Vec<u8>, NativeStatus> {
+    serde_json::to_vec(&Event {
+        abi: ABI_VERSION, kind, event_id: format!("{event_id:032x}"), request_id: ZERO_ID,
+        generation: generation.to_string(), session_id: session, transfer_id: ZERO_ID,
+        data: serde_json::json!({"transport_ready": false, "route_generation": route_generation.to_string()}),
+    }).map_err(|_| NativeStatus::InternalFailure)
+}

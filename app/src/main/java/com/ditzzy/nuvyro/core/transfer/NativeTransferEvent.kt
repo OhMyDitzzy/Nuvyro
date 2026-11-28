@@ -13,7 +13,8 @@ internal data class NativeTransferEvent(
     val generation: Long,
     val sessionId: String,
     val transferId: String,
-    val dataJson: String
+    val dataJson: String,
+    val routeGeneration: Long? = null
 ) {
     override fun toString(): String = "NativeTransferEvent(kind=$kind, id=$id)"
 }
@@ -23,7 +24,7 @@ internal object NativeEventCodec {
     private val idPattern = Regex("[0-9a-f]{32}")
     private val generationPattern = Regex("0|[1-9][0-9]{0,18}")
     private val kinds = setOf(
-        "SessionStarted", "InvitationCreated", "Paired", "OfferReceived", "AwaitingSource", "AwaitingDestination",
+        "SessionStarted", "ReceiverListening", "ReceiverStopped", "InvitationCreated", "Paired", "OfferReceived", "AwaitingSource", "AwaitingDestination",
         "FileVerified", "DestinationCommitRequired", "Progress", "FileCommitted", "TransferCompleted", "Declined",
         "Cancelled", "DeliveryUnconfirmed", "SessionClosed", "Failed"
     )
@@ -47,12 +48,18 @@ internal object NativeEventCodec {
             val generation = generationText.toLongOrNull() ?: error("Invalid native generation")
             val sessionId = item.identifier("session_id")
             val data = item.getJSONObject("data")
-            if (kind == "SessionStarted" || kind == "SessionClosed") {
+            if (kind in setOf("ReceiverListening", "ReceiverStopped")) {
+                require(data.keys().asSequence().toSet() == setOf("transport_ready", "route_generation"))
+                val route = data.strictString("route_generation")
+                require(route.matches(generationPattern) && (route.toLongOrNull() ?: 0) > 0)
+            }
+            if (kind in setOf("SessionStarted", "SessionClosed", "ReceiverListening", "ReceiverStopped")) {
                 require(generation > 0 && sessionId != NativeCommandCodec.ZERO_ID)
                 require(data.get("transport_ready") == false)
             }
             NativeTransferEvent(kind, id, item.identifier("request_id"), generation, sessionId,
-                item.identifier("transfer_id"), data.toString())
+                item.identifier("transfer_id"), data.toString(),
+                if (kind in setOf("ReceiverListening", "ReceiverStopped")) data.strictString("route_generation").toLong() else null)
         }
     }
 

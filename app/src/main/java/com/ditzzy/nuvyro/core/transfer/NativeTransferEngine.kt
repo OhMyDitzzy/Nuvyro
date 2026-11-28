@@ -1,5 +1,8 @@
 package com.ditzzy.nuvyro.core.transfer
 
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverCommandCodec
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverNativePort
+import com.ditzzy.nuvyro.core.transfer.receiver.ReceiverRouteSnapshot
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
@@ -18,18 +21,21 @@ internal sealed interface NativeEngineOpenResult {
     data class Failed(val status: NativeStatus) : NativeEngineOpenResult
 }
 
-internal class NativeTransferEngine private constructor(initialHandle: Long) : AutoCloseable {
+internal class NativeTransferEngine private constructor(initialHandle: Long) : ReceiverNativePort {
     private val handle = AtomicLong(initialHandle)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val closed = CompletableDeferred<Unit>()
     private val pump = NativeEventPump(scope, handle::get, ::close)
-    val pendingEvents get() = pump.pending
-    val failure get() = pump.failure
+    override val pendingEvents get() = pump.pending
+    override val failure get() = pump.failure
 
     init { pump.start() }
 
-    suspend fun startLocalSession(): NativeStatus = submit(NativeCommandCodec::startSession)
-    suspend fun closeLocalSession(generation: Long, sessionId: String): NativeStatus =
+    override suspend fun startLocalSession(requestId: String): NativeStatus = submit { NativeCommandCodec.startSession(requestId) }
+    override suspend fun receiverRoutes(generation: Long, sessionId: String, routeGeneration: Long,
+        routes: ReceiverRouteSnapshot, update: Boolean): NativeStatus =
+        submit { ReceiverCommandCodec.encode(generation, sessionId, routeGeneration, routes, update) }
+    override suspend fun closeLocalSession(generation: Long, sessionId: String): NativeStatus =
         submit { NativeCommandCodec.closeSession(generation, sessionId) }
 
     private suspend fun submit(command: () -> ByteArray): NativeStatus = withContext(Dispatchers.IO) {
@@ -38,7 +44,7 @@ internal class NativeTransferEngine private constructor(initialHandle: Long) : A
         else NativeStatus.fromCode(NativeTransferBridge.nativeSubmit(current, command()))
     }
 
-    fun acknowledgeThrough(eventId: String): Boolean = pump.acknowledgeThrough(eventId)
+    override fun acknowledgeThrough(eventId: String): Boolean = pump.acknowledgeThrough(eventId)
 
     override fun close() {
         val current = handle.getAndSet(0L)
@@ -52,7 +58,7 @@ internal class NativeTransferEngine private constructor(initialHandle: Long) : A
         }
     }
 
-    suspend fun awaitClosed() { closed.await() }
+    override suspend fun awaitClosed() { closed.await() }
 
     companion object {
         private val library = NativeLibrary()
